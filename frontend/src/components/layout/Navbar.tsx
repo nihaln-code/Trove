@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth'
 
@@ -10,6 +11,7 @@ const navItems = [
 export default function Navbar() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const [avatarError, setAvatarError] = useState(false)
 
   function handleLogout() {
     logout()
@@ -46,10 +48,17 @@ export default function Navbar() {
             to="/profile"
             className="flex cursor-pointer items-center gap-2 rounded-full transition-opacity hover:opacity-80"
           >
-            {user?.avatar_url ? (
-              <img src={user.avatar_url} alt={user.name} className="h-8 w-8 rounded-full" />
+            {user?.avatar_url && !avatarError ? (
+              <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full">
+                <img
+                  src={user.avatar_url}
+                  alt={user.name}
+                  className="h-full w-full object-cover"
+                  onError={() => setAvatarError(true)}
+                />
+              </div>
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-trove-accent text-sm font-semibold text-white">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-trove-accent text-sm font-semibold text-white">
                 {user?.name?.[0]?.toUpperCase()}
               </div>
             )}

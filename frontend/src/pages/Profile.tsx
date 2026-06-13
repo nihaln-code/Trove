@@ -25,8 +25,10 @@ const REGIONS = [
 export default function Profile() {
   const { user, setUser } = useAuthStore()
   const queryClient = useQueryClient()
+  const [avatarError, setAvatarError] = useState(false)
   const [providerRegion, setProviderRegion] = useState(user?.default_region ?? 'US')
   const [showAddPanel, setShowAddPanel] = useState(false)
+  const [providerSearch, setProviderSearch] = useState('')
 
   const { data: myServices = [] } = useQuery<StreamingService[]>({
     queryKey: ['streaming-services'],
@@ -76,10 +78,17 @@ export default function Profile() {
       <section className="mb-8 rounded-xl border border-trove-border bg-trove-card p-6">
         <h2 className="mb-4 text-lg font-semibold text-trove-text">Account</h2>
         <div className="flex items-center gap-4">
-          {user?.avatar_url ? (
-            <img src={user.avatar_url} alt={user.name} className="h-14 w-14 rounded-full" />
+          {user?.avatar_url && !avatarError ? (
+            <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full">
+              <img
+                src={user.avatar_url}
+                alt={user.name}
+                className="h-full w-full object-cover"
+                onError={() => setAvatarError(true)}
+              />
+            </div>
           ) : (
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-trove-accent text-xl font-bold">
+            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-trove-accent text-xl font-bold text-white">
               {user?.name?.[0]?.toUpperCase()}
             </div>
           )}
@@ -180,17 +189,33 @@ export default function Profile() {
         {/* Add service panel */}
         {showAddPanel && (
           <div>
-            <div className="mb-3 flex items-center gap-3">
-              <span className="text-sm text-trove-muted">Browse providers for region:</span>
-              <select
-                value={providerRegion}
-                onChange={(e) => setProviderRegion(e.target.value)}
-                className="rounded border border-trove-border bg-trove-surface px-2 py-1 text-xs text-trove-text outline-none focus:border-trove-accent"
-              >
-                {REGIONS.map((r) => (
-                  <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
-                ))}
-              </select>
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <div className="relative flex-1">
+                <svg
+                  className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-trove-muted"
+                  fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+                <input
+                  value={providerSearch}
+                  onChange={(e) => setProviderSearch(e.target.value)}
+                  placeholder="Search services..."
+                  className="w-full rounded-lg border border-trove-border bg-trove-surface py-1.5 pl-9 pr-3 text-sm text-trove-text placeholder-trove-muted outline-none focus:border-trove-accent"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-trove-muted">Region:</span>
+                <select
+                  value={providerRegion}
+                  onChange={(e) => setProviderRegion(e.target.value)}
+                  className="rounded border border-trove-border bg-trove-surface px-2 py-1 text-xs text-trove-text outline-none focus:border-trove-accent"
+                >
+                  {REGIONS.map((r) => (
+                    <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {providersLoading ? (
@@ -199,7 +224,9 @@ export default function Profile() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto sm:grid-cols-3">
-                {allProviders.map((provider) => {
+                {allProviders.filter((p) =>
+                  p.provider_name.toLowerCase().includes(providerSearch.toLowerCase())
+                ).map((provider) => {
                   const isAdded = myProviderIds.has(provider.provider_id)
                   return (
                     <button
