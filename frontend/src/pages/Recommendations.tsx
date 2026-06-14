@@ -1,12 +1,34 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import api, { TMDB_IMAGE } from '../services/api'
-import type { RecommendationItem, WatchlistItem } from '../types'
+import type { RecommendationItem, WatchlistItem, WatchlistStatus } from '../types'
+import ContentModal from '../components/content/ContentModal'
+
+const STATUS_BUTTONS: { status: WatchlistStatus; label: string }[] = [
+  { status: 'want_to_watch', label: 'Want to Watch' },
+  { status: 'watching',      label: 'Watching'      },
+  { status: 'watched',       label: 'Watched'       },
+]
+
+function timeAgo(iso: string): string {
+  const seconds = Math.floor((Date.now() - new Date(iso + 'Z').getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
 
 export default function Recommendations() {
   const queryClient = useQueryClient()
-  const [fetched, setFetched] = useState(false)
+  const [items, setItems] = useState<RecommendationItem[]>([])
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null)
+  const [selectedItem, setSelectedItem] = useState<RecommendationItem | null>(null)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   const { data: watchlist = [] } = useQuery<WatchlistItem[]>({
     queryKey: ['watchlist'],
@@ -18,35 +40,96 @@ export default function Recommendations() {
     queryFn: () => api.get('/streaming-services').then((r) => r.data),
   })
 
-  const {
-    data: recommendations,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery<RecommendationItem[]>({
+  // Auto-fetch on mount — cache makes this instant on repeat visits
+  const { data: recsData, isLoading, error } = useQuery<{ items: RecommendationItem[]; generated_at: string }>({
     queryKey: ['recommendations'],
     queryFn: () => api.get('/recommendations').then((r) => r.data),
-    enabled: false,
+    enabled: services.length > 0 && watchlist.length > 0,
+    staleTime: Infinity,
+  })
+
+  useEffect(() => {
+    if (recsData) {
+      setItems(recsData.items ?? [])
+      setGeneratedAt(recsData.generated_at ?? null)
+    }
+  }, [recsData])
+
+  const refreshMutation = useMutation({
+    mutationFn: () => api.post('/recommendations/refresh').then((r) => r.data),
+    onSettled: (data, error) => {
+      if (data) {
+        setItems(data.items)
+        setGeneratedAt(data.generated_at)
+        setRefreshError(null)
+        queryClient.setQueryData(['recommendations'], data)
+      }
+      if (error) {
+        const e = error as { response?: { data?: { detail?: string } } }
+        setRefreshError(e?.response?.data?.detail ?? 'Refresh failed')
+      }
+    },
   })
 
   const addToWatchlist = useMutation({
-    mutationFn: (item: RecommendationItem) =>
+    mutationFn: ({ item, status }: { item: RecommendationItem; status: WatchlistStatus }) =>
       api.post('/watchlist', {
-        tmdb_id: item.tmdb_id,
-        media_type: item.media_type,
-        title: item.title,
-        poster_path: item.poster_path,
+        tmdb_id: item.tmdb_id, media_type: item.media_type,
+        title: item.title, poster_path: item.poster_path, status,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
   })
 
-  async function handleGenerate() {
-    setFetched(true)
-    await refetch()
+  const updateWatchlist = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: WatchlistStatus }) =>
+      api.patch(`/watchlist/${id}`, { status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+  })
+
+  const removeFromWatchlist = useMutation({
+    mutationFn: (id: number) => api.delete(`/watchlist/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+  })
+
+  function handleStatus(item: RecommendationItem, status: WatchlistStatus) {
+    const entry = watchlist.find((w) => w.tmdb_id === item.tmdb_id && w.media_type === item.media_type)
+    if (!entry) addToWatchlist.mutate({ item, status })
+    else if (entry.status === status) removeFromWatchlist.mutate(entry.id)
+    else updateWatchlist.mutate({ id: entry.id, status })
   }
 
-  const inWatchlist = (item: RecommendationItem) =>
-    watchlist.some((w) => w.tmdb_id === item.tmdb_id && w.media_type === item.media_type)
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || isLoading) return
+    setIsLoadingMore(true)
+    try {
+      const excludeTitles = items.map((i) => i.title).join(',')
+      const { data } = await api.get('/recommendations', { params: { exclude_titles: excludeTitles } })
+      const newItems: RecommendationItem[] = Array.isArray(data) ? data : data.items ?? []
+      setItems((prev) => {
+        const seen = new Set(prev.map((i) => `${i.tmdb_id}-${i.media_type}`))
+        return [...prev, ...newItems.filter((i) => !seen.has(`${i.tmdb_id}-${i.media_type}`))]
+      })
+    } catch {
+      // silently ignore
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }, [isLoadingMore, isLoading, items])
+
+  const onIntersect = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      if (entries[0].isIntersecting) loadMore()
+    },
+    [loadMore],
+  )
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || items.length === 0) return
+    const observer = new IntersectionObserver(onIntersect, { rootMargin: '300px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [onIntersect, items.length])
 
   const noServices = services.length === 0
   const emptyWatchlist = watchlist.length === 0
@@ -55,119 +138,132 @@ export default function Recommendations() {
     <div>
       <div className="mb-8 flex flex-col items-center text-center">
         <h1 className="mb-2 font-display text-3xl text-trove-text">For You</h1>
-        <p className="mb-6 max-w-lg text-sm text-trove-muted">
-          AI-powered recommendations based on your watchlist, tailored to what's available on your streaming services.
+        <p className="mb-4 max-w-lg text-sm text-trove-muted">
+          Recommendations based on your watchlist, refreshed automatically every 2 hours.
         </p>
 
         {(noServices || emptyWatchlist) ? (
           <div className="rounded-xl border border-trove-border bg-trove-surface p-6 text-sm text-trove-muted">
-            {noServices && (
-              <p>
-                <Link to="/profile" className="text-trove-accent hover:underline">Add streaming services</Link>{' '}
-                to get recommendations.
-              </p>
-            )}
-            {!noServices && emptyWatchlist && (
-              <p>
-                <Link to="/browse" className="text-trove-accent hover:underline">Add titles to your watchlist</Link>{' '}
-                so the AI understands your taste.
-              </p>
+            {noServices ? (
+              <p><Link to="/profile" className="text-trove-accent hover:underline">Add streaming services</Link> to get recommendations.</p>
+            ) : (
+              <p><Link to="/browse" className="text-trove-accent hover:underline">Add titles to your watchlist</Link> so we can understand your taste.</p>
             )}
           </div>
         ) : (
-          <button
-            onClick={handleGenerate}
-            disabled={isLoading}
-            className="flex cursor-pointer items-center gap-2 rounded-xl bg-trove-accent px-8 py-3 font-semibold text-white transition-colors hover:bg-trove-accent-hover disabled:opacity-60"
-          >
-            {isLoading ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
-                </svg>
-                {fetched ? 'Regenerate' : 'Generate'} Recommendations
-              </>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => refreshMutation.mutate()}
+              disabled={refreshMutation.isPending}
+              className="flex cursor-pointer items-center gap-2 rounded-xl border border-trove-border bg-trove-surface px-5 py-2 text-sm font-medium text-trove-muted transition-colors hover:border-trove-accent hover:text-trove-text disabled:opacity-50"
+            >
+              {refreshMutation.isPending ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                  Refresh
+                </>
+              )}
+            </button>
+            {generatedAt && !refreshMutation.isPending && (
+              <p className="text-xs text-trove-muted">Updated {timeAgo(generatedAt)}</p>
             )}
-          </button>
+            {refreshError && (
+              <p className="text-xs text-amber-400">{refreshError}</p>
+            )}
+          </div>
         )}
       </div>
 
       {error && (
         <div className="mx-auto mb-6 max-w-lg rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-center text-sm text-red-400">
-          {(error as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? 'Failed to generate recommendations. Try again.'}
+          {(error as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? 'Failed to load recommendations.'}
         </div>
       )}
 
-      {recommendations && recommendations.length > 0 && (
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-          {recommendations.map((item) => (
-            <div
-              key={`${item.tmdb_id}-${item.media_type}`}
-              className="flex flex-col overflow-hidden rounded-xl border border-trove-border bg-trove-card"
-            >
-              <div className="aspect-[2/3] overflow-hidden bg-trove-border">
-                {TMDB_IMAGE(item.poster_path) ? (
-                  <img
-                    src={TMDB_IMAGE(item.poster_path)!}
-                    alt={item.title}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center p-2 text-center text-xs text-trove-muted">
-                    {item.title}
-                  </div>
-                )}
-              </div>
+      {isLoading && items.length === 0 && (
+        <div className="flex flex-col items-center gap-3 py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
+          <p className="text-sm text-trove-muted">Generating your first recommendations…</p>
+        </div>
+      )}
 
-              <div className="flex flex-1 flex-col p-3">
-                <p className="mb-1 line-clamp-2 text-sm font-semibold text-trove-text">{item.title}</p>
-                <p className="mb-2 line-clamp-3 text-xs text-trove-muted">{item.reason}</p>
+      {items.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {items.map((item) => (
+              <div
+                key={`${item.tmdb_id}-${item.media_type}`}
+                className="flex flex-col overflow-hidden rounded-xl border border-trove-border bg-trove-card cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:ring-1 hover:ring-trove-accent/30 hover:shadow-xl hover:shadow-black/50"
+                onClick={() => setSelectedItem(item)}
+              >
+                <div className="aspect-[2/3] overflow-hidden bg-trove-border">
+                  {TMDB_IMAGE(item.poster_path) ? (
+                    <img src={TMDB_IMAGE(item.poster_path)!} alt={item.title} className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center p-2 text-center text-xs text-trove-muted">{item.title}</div>
+                  )}
+                </div>
 
-                {item.available_on.length > 0 ? (
-                  <div className="mb-2 flex flex-wrap gap-1">
+                <div className="flex flex-1 flex-col p-3">
+                  <p className="mb-1 line-clamp-2 text-sm font-semibold text-trove-text">{item.title}</p>
+                  <p className="mb-2 line-clamp-3 text-xs text-trove-muted">{item.reason}</p>
+
+                  <div className="mb-3 flex flex-wrap gap-1">
                     {item.available_on.map((svc) => (
-                      <span
-                        key={svc}
-                        className="rounded bg-trove-accent/20 px-1.5 py-0.5 text-xs text-trove-accent"
-                      >
-                        {svc}
-                      </span>
+                      <span key={svc} className="rounded bg-trove-accent/20 px-1.5 py-0.5 text-xs text-trove-accent">{svc}</span>
                     ))}
                   </div>
-                ) : (
-                  <span className="mb-2 text-xs text-trove-muted">Not on your services</span>
-                )}
 
-                <button
-                  onClick={() => addToWatchlist.mutate(item)}
-                  disabled={inWatchlist(item) || addToWatchlist.isPending}
-                  className={`mt-auto flex w-full cursor-pointer items-center justify-center gap-1.5 rounded py-1.5 text-xs font-semibold transition-colors ${
-                    inWatchlist(item)
-                      ? 'cursor-default bg-trove-surface text-trove-muted'
-                      : 'bg-trove-accent text-white hover:bg-trove-accent-hover'
-                  }`}
-                >
-                  {inWatchlist(item) ? (
-                    <>
-                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                      In Watchlist
-                    </>
-                  ) : (
-                    '+ Watchlist'
-                  )}
-                </button>
+                  <div className="mt-auto flex flex-col gap-1.5">
+                    {STATUS_BUTTONS.map(({ status, label }) => {
+                      const entry = watchlist.find((w) => w.tmdb_id === item.tmdb_id && w.media_type === item.media_type)
+                      const isActive = entry?.status === status
+                      const isPending = addToWatchlist.isPending || updateWatchlist.isPending || removeFromWatchlist.isPending
+                      return (
+                        <button
+                          key={status}
+                          onClick={(e) => { e.stopPropagation(); handleStatus(item, status) }}
+                          disabled={isPending}
+                          className={`flex w-full cursor-pointer items-center justify-center gap-1.5 rounded py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
+                            isActive ? 'bg-trove-accent text-white' : 'bg-trove-surface text-trove-muted hover:bg-trove-border hover:text-trove-text'
+                          }`}
+                        >
+                          {isActive && (
+                            <svg className="h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          )}
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+
+          <div ref={sentinelRef} className="flex justify-center py-8">
+            {isLoadingMore && (
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
+            )}
+          </div>
+        </>
+      )}
+
+      {selectedItem && (
+        <ContentModal
+          tmdbId={selectedItem.tmdb_id}
+          mediaType={selectedItem.media_type as 'movie' | 'tv'}
+          onClose={() => setSelectedItem(null)}
+        />
       )}
     </div>
   )

@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, UniqueConstraint, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -62,3 +62,11 @@ class WatchlistItem(Base):
     user = relationship("User", back_populates="watchlist")
 
     __table_args__ = (UniqueConstraint("user_id", "tmdb_id", "media_type"),)
+
+
+class RecommendationCache(Base):
+    __tablename__ = "recommendation_cache"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    items = Column(Text, nullable=False)       # JSON array of recommendation objects
+    generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)

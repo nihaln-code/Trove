@@ -1,4 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#1f1914"/>
-  <text x="16" y="23" font-family="Georgia, serif" font-size="20" font-style="italic" font-weight="400" fill="#d08c3a" text-anchor="middle">T</text>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ede6da"/>
+      <stop offset="100%" stop-color="#d08c3a"/>
+    </linearGradient>
+  </defs>
+  <!-- dark rounded background -->
+  <rect width="32" height="32" rx="7" fill="#1f1914"/>
+  <!-- subtle inner glow -->
+  <rect x="1" y="1" width="30" height="30" rx="6.5" fill="none" stroke="#d08c3a" stroke-width="0.5" opacity="0.4"/>
+  <!-- italic serif T with cream-to-amber gradient -->
+  <text x="16" y="24" font-family="Georgia, serif" font-size="23" font-style="italic" font-weight="400" fill="url(#g)" text-anchor="middle">T</text>
 </svg>

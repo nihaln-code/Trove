@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { TMDBContent, WatchlistItem, WatchlistStatus } from '../../types'
 import { TMDB_IMAGE } from '../../services/api'
 import api from '../../services/api'
+import ContentModal from './ContentModal'
 
 interface Props {
   item: TMDBContent
@@ -16,6 +18,7 @@ const STATUS_BUTTONS: { status: WatchlistStatus; label: string }[] = [
 
 export default function ContentCard({ item, watchlistItems = [] }: Props) {
   const queryClient = useQueryClient()
+  const [showModal, setShowModal] = useState(false)
 
   const title = item.title || item.name || 'Unknown'
   const year = (item.release_date || item.first_air_date || '').slice(0, 4)
@@ -61,7 +64,11 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
   }
 
   return (
-    <div className="group relative overflow-hidden rounded-xl bg-trove-card transition-all duration-200 hover:-translate-y-1 hover:ring-1 hover:ring-trove-accent/30 hover:shadow-xl hover:shadow-black/50">
+    <>
+    <div
+      className="group relative overflow-hidden rounded-xl bg-trove-card transition-all duration-200 hover:-translate-y-1 hover:ring-1 hover:ring-trove-accent/30 hover:shadow-xl hover:shadow-black/50 cursor-pointer"
+      onClick={() => setShowModal(true)}
+    >
       <div className="aspect-[2/3] overflow-hidden bg-trove-border">
         {poster ? (
           <img
@@ -91,7 +98,7 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
             return (
               <button
                 key={status}
-                onClick={() => handleStatus(status)}
+                onClick={(e) => { e.stopPropagation(); handleStatus(status) }}
                 disabled={isPending}
                 className={`flex w-full cursor-pointer items-center justify-center gap-1.5 rounded py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
                   isActive
@@ -111,5 +118,14 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
         </div>
       </div>
     </div>
+
+    {showModal && (
+      <ContentModal
+        tmdbId={item.id}
+        mediaType={item.media_type}
+        onClose={() => setShowModal(false)}
+      />
+    )}
+    </>
   )
 }

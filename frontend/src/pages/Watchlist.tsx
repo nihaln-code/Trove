@@ -128,7 +128,7 @@ export default function Watchlist() {
                       key={s}
                       onClick={() => updateStatus.mutate({ id: item.id, status: s })}
                       disabled={updateStatus.isPending}
-                      className={`cursor-pointer rounded border px-2 py-1 text-xs font-medium transition-colors ${
+                      className={`cursor-pointer rounded border px-2.5 py-1.5 text-xs font-medium transition-colors ${
                         item.status === s
                           ? STATUS_COLORS[s]
                           : 'border-trove-border text-trove-muted hover:text-trove-text'

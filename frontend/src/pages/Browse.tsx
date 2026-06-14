@@ -127,7 +127,7 @@ export default function Browse() {
       <div className="mb-6 space-y-3">
         {/* Row 1: search + type toggle */}
         <div className="flex flex-wrap items-center gap-3">
-          <form onSubmit={handleSearch} className="flex gap-2">
+          <form onSubmit={handleSearch} className="flex flex-1 gap-2 sm:flex-none">
             <div className="relative">
               <svg
                 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-trove-muted"
@@ -139,7 +139,7 @@ export default function Browse() {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search movies & shows..."
-                className="w-64 rounded-lg border border-trove-border bg-trove-surface py-2 pl-9 pr-3 text-sm text-trove-text placeholder-trove-muted outline-none transition-colors focus:border-trove-accent"
+                className="w-full rounded-lg border border-trove-border bg-trove-surface py-2 pl-9 pr-3 text-sm text-trove-text placeholder-trove-muted outline-none transition-colors focus:border-trove-accent sm:w-64"
               />
             </div>
             <button
