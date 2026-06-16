@@ -1,11 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from app.config import settings
 from app.database import engine, Base
-from app.routers import auth, users, streaming_services, content, watchlist, recommendations
+from app.routers import auth, users, streaming_services, content, watchlist, recommendations, groups
 
 # Create tables on startup (use Alembic for production migrations)
 Base.metadata.create_all(bind=engine)
+
+# Add new columns to existing tables without dropping data
+with engine.connect() as conn:
+    conn.execute(text("ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS rating INTEGER"))
+    conn.commit()
 
 app = FastAPI(title="Trove API", version="1.0.0")
 
@@ -23,6 +29,7 @@ app.include_router(streaming_services.router)
 app.include_router(content.router)
 app.include_router(watchlist.router)
 app.include_router(recommendations.router)
+app.include_router(groups.router)
 
 
 @app.get("/health")

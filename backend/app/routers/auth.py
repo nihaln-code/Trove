@@ -17,9 +17,10 @@ async def google_login(body: schemas.GoogleAuthRequest, db: Session = Depends(ge
             body.credential,
             google_requests.Request(),
             settings.google_client_id,
+            clock_skew_in_seconds=10,
         )
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid Google token: {e}")
 
     google_id = idinfo["sub"]
     email = idinfo["email"]

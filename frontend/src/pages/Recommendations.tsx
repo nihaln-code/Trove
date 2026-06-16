@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import api, { TMDB_IMAGE } from '../services/api'
 import type { RecommendationItem, WatchlistItem, WatchlistStatus } from '../types'
 import ContentModal from '../components/content/ContentModal'
+import RatingButtons from '../components/content/RatingButtons'
 
 const STATUS_BUTTONS: { status: WatchlistStatus; label: string }[] = [
   { status: 'want_to_watch', label: 'Want to Watch' },
@@ -28,6 +29,7 @@ export default function Recommendations() {
   const [selectedItem, setSelectedItem] = useState<RecommendationItem | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const loadMorePage = useRef(2)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   const { data: watchlist = [] } = useQuery<WatchlistItem[]>({
@@ -52,24 +54,31 @@ export default function Recommendations() {
     if (recsData) {
       setItems(recsData.items ?? [])
       setGeneratedAt(recsData.generated_at ?? null)
+      loadMorePage.current = 2
     }
   }, [recsData])
 
   const refreshMutation = useMutation({
     mutationFn: () => api.post('/recommendations/refresh').then((r) => r.data),
-    onSettled: (data, error) => {
-      if (data) {
-        setItems(data.items)
-        setGeneratedAt(data.generated_at)
-        setRefreshError(null)
-        queryClient.setQueryData(['recommendations'], data)
-      }
-      if (error) {
-        const e = error as { response?: { data?: { detail?: string } } }
-        setRefreshError(e?.response?.data?.detail ?? 'Refresh failed')
-      }
-    },
   })
+
+  useEffect(() => {
+    const data = refreshMutation.data as { items: RecommendationItem[]; generated_at: string } | undefined
+    if (data?.items?.length) {
+      setItems(data.items)
+      setGeneratedAt(data.generated_at)
+      setRefreshError(null)
+      loadMorePage.current = 2
+      queryClient.setQueryData(['recommendations'], data)
+    }
+  }, [refreshMutation.data])
+
+  useEffect(() => {
+    if (refreshMutation.error) {
+      const e = refreshMutation.error as { response?: { data?: { detail?: string } } }
+      setRefreshError(e?.response?.data?.detail ?? 'Refresh failed')
+    }
+  }, [refreshMutation.error])
 
   const addToWatchlist = useMutation({
     mutationFn: ({ item, status }: { item: RecommendationItem; status: WatchlistStatus }) =>
@@ -101,20 +110,23 @@ export default function Recommendations() {
   const loadMore = useCallback(async () => {
     if (isLoadingMore || isLoading) return
     setIsLoadingMore(true)
+    const page = loadMorePage.current
     try {
-      const excludeTitles = items.map((i) => i.title).join(',')
-      const { data } = await api.get('/recommendations', { params: { exclude_titles: excludeTitles } })
+      const { data } = await api.get('/recommendations', { params: { page } })
       const newItems: RecommendationItem[] = Array.isArray(data) ? data : data.items ?? []
-      setItems((prev) => {
-        const seen = new Set(prev.map((i) => `${i.tmdb_id}-${i.media_type}`))
-        return [...prev, ...newItems.filter((i) => !seen.has(`${i.tmdb_id}-${i.media_type}`))]
-      })
+      if (newItems.length > 0) {
+        setItems((prev) => {
+          const seen = new Set(prev.map((i) => `${i.tmdb_id}-${i.media_type}`))
+          return [...prev, ...newItems.filter((i) => !seen.has(`${i.tmdb_id}-${i.media_type}`))]
+        })
+        loadMorePage.current = page + 1
+      }
     } catch {
       // silently ignore
     } finally {
       setIsLoadingMore(false)
     }
-  }, [isLoadingMore, isLoading, items])
+  }, [isLoadingMore, isLoading])
 
   const onIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
@@ -190,7 +202,16 @@ export default function Recommendations() {
       {isLoading && items.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
-          <p className="text-sm text-trove-muted">Generating your first recommendations…</p>
+          <p className="text-sm text-trove-muted">Finding recommendations for you…</p>
+        </div>
+      )}
+
+      {!isLoading && !refreshMutation.isPending && items.length === 0 && !noServices && !emptyWatchlist && (
+        <div className="mx-auto max-w-md rounded-xl border border-trove-border bg-trove-surface p-8 text-center">
+          <p className="mb-2 text-sm font-medium text-trove-text">No recommendations found</p>
+          <p className="text-sm text-trove-muted">
+            Try adding more titles to your <Link to="/watchlist" className="text-trove-accent hover:underline">watchlist</Link>, or check that your streaming services are set up in your <Link to="/profile" className="text-trove-accent hover:underline">profile</Link>.
+          </p>
         </div>
       )}
 
@@ -244,6 +265,15 @@ export default function Recommendations() {
                         </button>
                       )
                     })}
+                    {(() => {
+                      const entry = watchlist.find((w) => w.tmdb_id === item.tmdb_id && w.media_type === item.media_type)
+                      return entry?.status === 'watched' ? (
+                        <div className="flex items-center justify-between border-t border-trove-border pt-1.5">
+                          <span className="text-xs text-trove-muted">Rate it</span>
+                          <RatingButtons entryId={entry.id} currentRating={entry.rating} size="sm" />
+                        </div>
+                      ) : null
+                    })()}
                   </div>
                 </div>
               </div>

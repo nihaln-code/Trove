@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api, { TMDB_IMAGE } from '../../services/api'
 import type { WatchlistItem, WatchlistStatus } from '../../types'
+import RatingButtons from './RatingButtons'
 
 interface Props {
   tmdbId: number
@@ -219,6 +220,12 @@ export default function ContentModal({ tmdbId, mediaType, onClose }: Props) {
                   )
                 })}
               </div>
+              {entry?.status === 'watched' && (
+                <div className="mt-3 flex items-center justify-between rounded-lg bg-trove-card px-3 py-2">
+                  <span className="text-xs text-trove-muted">Did you like it?</span>
+                  <RatingButtons entryId={entry.id} currentRating={entry.rating} />
+                </div>
+              )}
             </div>
           </div>
         ) : null}

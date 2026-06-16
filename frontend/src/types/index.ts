@@ -25,6 +25,7 @@ export interface WatchlistItem {
   poster_path: string | null
   added_at: string
   status: WatchlistStatus
+  rating: 1 | -1 | null
 }
 
 export interface TMDBContent {
@@ -56,4 +57,40 @@ export interface RecommendationItem {
   vote_average: number | null
   reason: string
   available_on: string[]
+}
+
+export type GroupRole = 'owner' | 'member'
+
+export interface GroupMember {
+  user_id: number
+  name: string
+  email: string
+  avatar_url: string | null
+  role: GroupRole
+  joined_at: string
+}
+
+export interface Group {
+  id: number
+  name: string
+  invite_code: string
+  owner_id: number
+  created_at: string
+  member_count: number
+}
+
+export interface GroupDetail extends Group {
+  members: GroupMember[]
+}
+
+export interface GroupWatchlistItem {
+  id: number
+  tmdb_id: number
+  media_type: MediaType
+  title: string
+  poster_path: string | null
+  added_at: string
+  added_by_user_id: number
+  added_by_name: string
+  status: WatchlistStatus
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api, { TMDB_IMAGE } from '../services/api'
 import type { WatchlistItem, WatchlistStatus } from '../types'
+import RatingButtons from '../components/content/RatingButtons'
 
 const STATUS_LABELS: Record<WatchlistStatus, string> = {
   want_to_watch: 'Want to Watch',
@@ -137,6 +138,9 @@ export default function Watchlist() {
                       {STATUS_LABELS[s]}
                     </button>
                   ))}
+                  {item.status === 'watched' && (
+                    <RatingButtons entryId={item.id} currentRating={item.rating} size="sm" />
+                  )}
                   <button
                     onClick={() => removeItem.mutate(item.id)}
                     className="ml-auto cursor-pointer text-trove-muted transition-colors hover:text-red-400"

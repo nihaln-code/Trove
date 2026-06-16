@@ -46,9 +46,9 @@ def add_to_watchlist(
 
 
 @router.patch("/{item_id}", response_model=schemas.WatchlistItemOut)
-def update_status(
+def update_watchlist_item(
     item_id: int,
-    body: schemas.UpdateWatchlistStatusRequest,
+    body: schemas.UpdateWatchlistItemRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
@@ -60,7 +60,10 @@ def update_status(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    item.status = body.status
+    if "status" in body.model_fields_set:
+        item.status = body.status
+    if "rating" in body.model_fields_set:
+        item.rating = body.rating
     db.commit()
     db.refresh(item)
     return item

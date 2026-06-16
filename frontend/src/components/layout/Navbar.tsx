@@ -6,6 +6,7 @@ const navItems = [
   { to: '/browse', label: 'Browse' },
   { to: '/watchlist', label: 'Watchlist' },
   { to: '/recommendations', label: 'For You' },
+  { to: '/groups', label: 'Groups' },
 ]
 
 export default function Navbar() {

@@ -4,6 +4,7 @@ import type { TMDBContent, WatchlistItem, WatchlistStatus } from '../../types'
 import { TMDB_IMAGE } from '../../services/api'
 import api from '../../services/api'
 import ContentModal from './ContentModal'
+import RatingButtons from './RatingButtons'
 
 interface Props {
   item: TMDBContent
@@ -115,6 +116,12 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
               </button>
             )
           })}
+          {watchlistEntry?.status === 'watched' && (
+            <div className="flex items-center justify-between border-t border-white/10 pt-1.5">
+              <span className="text-xs text-white/50">Rate it</span>
+              <RatingButtons entryId={watchlistEntry.id} currentRating={watchlistEntry.rating} size="sm" />
+            </div>
+          )}
         </div>
       </div>
     </div>

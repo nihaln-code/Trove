@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, EmailStr
-from app.models import WatchlistStatus, MediaType
+from app.models import WatchlistStatus, MediaType, GroupRole
 
 
 # Auth
@@ -62,6 +62,7 @@ class WatchlistItemOut(BaseModel):
     poster_path: Optional[str]
     added_at: datetime
     status: WatchlistStatus
+    rating: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -74,8 +75,9 @@ class AddWatchlistItemRequest(BaseModel):
     status: WatchlistStatus = WatchlistStatus.want_to_watch
 
 
-class UpdateWatchlistStatusRequest(BaseModel):
-    status: WatchlistStatus
+class UpdateWatchlistItemRequest(BaseModel):
+    status: Optional[WatchlistStatus] = None
+    rating: Optional[int] = None
 
 
 # TMDB passthrough types (loosely typed since TMDB shapes vary)
@@ -95,3 +97,58 @@ class RecommendationItem(BaseModel):
     overview: Optional[str]
     reason: str
     available_on: list[str]
+
+
+# Groups
+class GroupMemberOut(BaseModel):
+    user_id: int
+    name: str
+    email: str
+    avatar_url: Optional[str]
+    role: GroupRole
+    joined_at: datetime
+
+
+class GroupOut(BaseModel):
+    id: int
+    name: str
+    invite_code: str
+    owner_id: int
+    created_at: datetime
+    member_count: int
+
+
+class GroupDetailOut(GroupOut):
+    members: list[GroupMemberOut]
+
+
+class CreateGroupRequest(BaseModel):
+    name: str
+
+
+class JoinGroupRequest(BaseModel):
+    invite_code: str
+
+
+class GroupWatchlistItemOut(BaseModel):
+    id: int
+    tmdb_id: int
+    media_type: MediaType
+    title: str
+    poster_path: Optional[str]
+    added_at: datetime
+    added_by_user_id: int
+    added_by_name: str
+    status: WatchlistStatus
+
+
+class AddGroupWatchlistItemRequest(BaseModel):
+    tmdb_id: int
+    media_type: MediaType
+    title: str
+    poster_path: Optional[str] = None
+    status: WatchlistStatus = WatchlistStatus.want_to_watch
+
+
+class UpdateGroupWatchlistItemRequest(BaseModel):
+    status: Optional[WatchlistStatus] = None
