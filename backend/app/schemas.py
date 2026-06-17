@@ -1,6 +1,7 @@
+import re
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from app.models import WatchlistStatus, MediaType, GroupRole
 
 
@@ -13,6 +14,10 @@ class TokenResponse(BaseModel):
 
 class GoogleAuthRequest(BaseModel):
     credential: str  # Google ID token
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 # User
@@ -29,6 +34,24 @@ class UserOut(BaseModel):
 class UserUpdateRequest(BaseModel):
     default_region: Optional[str] = None
     name: Optional[str] = None
+
+    @field_validator("default_region")
+    @classmethod
+    def validate_region(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not re.match(r"^[A-Za-z]{2}$", v):
+            raise ValueError("default_region must be a 2-letter country code (e.g. US)")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip()
+            if len(v) == 0:
+                raise ValueError("name cannot be empty")
+            if len(v) > 100:
+                raise ValueError("name must be 100 characters or fewer")
+        return v
 
 
 # Streaming Services
@@ -48,9 +71,23 @@ class AddStreamingServiceRequest(BaseModel):
     provider_logo_path: Optional[str] = None
     region_override: Optional[str] = None
 
+    @field_validator("region_override")
+    @classmethod
+    def validate_region_override(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not re.match(r"^[A-Za-z]{2}$", v):
+            raise ValueError("region_override must be a 2-letter country code (e.g. US)")
+        return v
+
 
 class UpdateStreamingServiceRequest(BaseModel):
     region_override: Optional[str] = None
+
+    @field_validator("region_override")
+    @classmethod
+    def validate_region_override(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not re.match(r"^[A-Za-z]{2}$", v):
+            raise ValueError("region_override must be a 2-letter country code (e.g. US)")
+        return v
 
 
 # Watchlist
@@ -78,6 +115,13 @@ class AddWatchlistItemRequest(BaseModel):
 class UpdateWatchlistItemRequest(BaseModel):
     status: Optional[WatchlistStatus] = None
     rating: Optional[int] = None
+
+    @field_validator("rating")
+    @classmethod
+    def validate_rating(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v not in (1, -1):
+            raise ValueError("rating must be 1 (liked) or -1 (disliked)")
+        return v
 
 
 # TMDB passthrough types (loosely typed since TMDB shapes vary)
@@ -125,9 +169,27 @@ class GroupDetailOut(GroupOut):
 class CreateGroupRequest(BaseModel):
     name: str
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) == 0:
+            raise ValueError("name cannot be empty")
+        if len(v) > 100:
+            raise ValueError("name must be 100 characters or fewer")
+        return v
+
 
 class JoinGroupRequest(BaseModel):
     invite_code: str
+
+    @field_validator("invite_code")
+    @classmethod
+    def validate_invite_code(cls, v: str) -> str:
+        v = v.strip()
+        if not re.match(r"^[A-Za-z0-9]{1,16}$", v):
+            raise ValueError("Invalid invite code format")
+        return v.upper()
 
 
 class GroupWatchlistItemOut(BaseModel):

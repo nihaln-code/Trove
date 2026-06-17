@@ -40,3 +40,6 @@ frontend/.vite/
 
 # Claude
 .claude/
+
+# Claude Code session files
+.ship-safe/

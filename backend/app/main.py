@@ -11,6 +11,7 @@ Base.metadata.create_all(bind=engine)
 # Add new columns to existing tables without dropping data
 with engine.connect() as conn:
     conn.execute(text("ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS rating INTEGER"))
+    conn.execute(text("ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS metadata_json TEXT"))
     conn.commit()
 
 app = FastAPI(title="Trove API", version="1.0.0")

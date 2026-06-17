@@ -60,6 +60,7 @@ class WatchlistItem(Base):
     added_at = Column(DateTime, default=datetime.utcnow)
     status = Column(Enum(WatchlistStatus), default=WatchlistStatus.want_to_watch, nullable=False)
     rating = Column(Integer, nullable=True)  # 1 = liked, -1 = disliked
+    metadata_json = Column(Text, nullable=True)  # JSON: {genre_ids, cast, director, runtime, vote_average}
 
     user = relationship("User", back_populates="watchlist")
 
@@ -105,6 +106,19 @@ class GroupMembership(Base):
     user = relationship("User", back_populates="group_memberships")
 
     __table_args__ = (UniqueConstraint("group_id", "user_id"),)
+
+
+class RecommendationReasonCache(Base):
+    __tablename__ = "recommendation_reason_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    tmdb_id = Column(Integer, nullable=False)
+    media_type = Column(String(10), nullable=False)
+    reason = Column(Text, nullable=False)
+    generated_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "tmdb_id", "media_type"),)
 
 
 class GroupWatchlistItem(Base):

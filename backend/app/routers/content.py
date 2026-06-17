@@ -93,7 +93,7 @@ def browse(
 
 @router.get("/search")
 def search(
-    query: str = Query(..., min_length=1),
+    query: str = Query(..., min_length=1, max_length=200),
     page: int = Query(1, ge=1),
     current_user: models.User = Depends(auth.get_current_user),
 ):

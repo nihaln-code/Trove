@@ -6,6 +6,7 @@ from google.auth.transport import requests as google_requests
 from app.database import get_db
 from app.config import settings
 from app import models, schemas, auth
+from app.schemas import RefreshTokenRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -51,14 +52,10 @@ async def google_login(body: schemas.GoogleAuthRequest, db: Session = Depends(ge
 
 @router.post("/refresh", response_model=schemas.TokenResponse)
 def refresh_tokens(
-    credentials: dict,
+    body: RefreshTokenRequest,
     db: Session = Depends(get_db),
 ):
-    token = credentials.get("refresh_token")
-    if not token:
-        raise HTTPException(status_code=400, detail="refresh_token required")
-
-    user_id = auth.decode_token(token, token_type="refresh")
+    user_id = auth.decode_token(body.refresh_token, token_type="refresh")
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
