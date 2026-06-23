@@ -5,15 +5,23 @@ interface Props {
   entryId: number | undefined
   currentRating: 1 | -1 | null | undefined
   size?: 'sm' | 'md'
+  patchUrl?: string
+  invalidateKey?: unknown[]
 }
 
-export default function RatingButtons({ entryId, currentRating, size = 'md' }: Props) {
+export default function RatingButtons({
+  entryId,
+  currentRating,
+  size = 'md',
+  patchUrl,
+  invalidateKey = ['watchlist'],
+}: Props) {
   const queryClient = useQueryClient()
 
   const ratingMutation = useMutation({
     mutationFn: (rating: 1 | -1 | null) =>
-      api.patch(`/watchlist/${entryId}`, { rating }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+      api.patch(patchUrl ?? `/watchlist/${entryId}`, { rating }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: invalidateKey }),
   })
 
   if (!entryId) return null

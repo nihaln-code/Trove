@@ -3,14 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import api, { TMDB_IMAGE } from '../services/api'
 import type { RecommendationItem, WatchlistItem, WatchlistStatus } from '../types'
+import { STATUS_BUTTONS } from '../types'
 import ContentModal from '../components/content/ContentModal'
 import RatingButtons from '../components/content/RatingButtons'
-
-const STATUS_BUTTONS: { status: WatchlistStatus; label: string }[] = [
-  { status: 'want_to_watch', label: 'Want to Watch' },
-  { status: 'watching',      label: 'Watching'      },
-  { status: 'watched',       label: 'Watched'       },
-]
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso + 'Z').getTime()) / 1000)

@@ -202,6 +202,7 @@ class GroupWatchlistItemOut(BaseModel):
     added_by_user_id: int
     added_by_name: str
     status: WatchlistStatus
+    rating: Optional[int] = None
 
 
 class AddGroupWatchlistItemRequest(BaseModel):
@@ -212,5 +213,29 @@ class AddGroupWatchlistItemRequest(BaseModel):
     status: WatchlistStatus = WatchlistStatus.want_to_watch
 
 
+class GroupServiceItem(BaseModel):
+    tmdb_provider_id: int
+    provider_name: str
+    provider_logo_path: Optional[str] = None
+
+
+class GroupServicesResponse(BaseModel):
+    active: list[GroupServiceItem]
+    available: list[GroupServiceItem]
+    is_custom: bool
+
+
+class SetGroupServicesRequest(BaseModel):
+    services: list[GroupServiceItem]
+
+
 class UpdateGroupWatchlistItemRequest(BaseModel):
     status: Optional[WatchlistStatus] = None
+    rating: Optional[int] = None
+
+    @field_validator("rating")
+    @classmethod
+    def rating_must_be_thumbs(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v not in (1, -1):
+            raise ValueError("rating must be 1 or -1")
+        return v

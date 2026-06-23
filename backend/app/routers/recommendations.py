@@ -30,6 +30,23 @@ def tmdb_get(path: str, params: dict = {}) -> dict:
     return r.json()
 
 
+def _parse_tmdb_metadata(data: dict) -> dict:
+    credits = data.get("credits", {})
+    cast = [c["name"] for c in credits.get("cast", [])[:5]]
+    director = next(
+        (c["name"] for c in credits.get("crew", []) if c.get("job") == "Director"),
+        None,
+    )
+    return {
+        "genre_ids": [g["id"] for g in data.get("genres", [])] or data.get("genre_ids", []),
+        "cast": cast,
+        "director": director,
+        "runtime": data.get("runtime") or next(iter(data.get("episode_run_time") or []), None),
+        "vote_average": data.get("vote_average"),
+        "original_language": data.get("original_language"),
+    }
+
+
 def _get_genre_map() -> dict[int, str]:
     if "merged" not in _genre_cache:
         movies = tmdb_get("/genre/movie/list", {"language": "en-US"})

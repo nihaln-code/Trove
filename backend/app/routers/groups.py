@@ -1,14 +1,34 @@
+import json
 import secrets
 import string
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, HTTPException, Query
-from app.database import get_db
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from app.database import get_db, SessionLocal
 from app import models, schemas, auth
+from app.routers.recommendations import tmdb_get, _parse_tmdb_metadata
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 _ALPHABET = string.ascii_uppercase + string.digits
+
+
+def _enrich_group_item_metadata(item_id: int) -> None:
+    db = SessionLocal()
+    try:
+        item = db.query(models.GroupWatchlistItem).filter_by(id=item_id).first()
+        if not item or item.metadata_json:
+            return
+        data = tmdb_get(
+            f"/{item.media_type.value}/{item.tmdb_id}",
+            {"language": "en-US", "append_to_response": "credits"},
+        )
+        item.metadata_json = json.dumps(_parse_tmdb_metadata(data))
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
 
 def generate_invite_code(length: int = 8) -> str:
@@ -55,6 +75,7 @@ def _item_out(item: models.GroupWatchlistItem) -> schemas.GroupWatchlistItemOut:
         added_by_user_id=item.added_by_user_id,
         added_by_name=item.added_by.name,
         status=item.status,
+        rating=item.rating,
     )
 
 
@@ -227,6 +248,7 @@ def get_group_watchlist(
 def add_group_watchlist_item(
     group_id: int,
     body: schemas.AddGroupWatchlistItemRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
@@ -253,6 +275,7 @@ def add_group_watchlist_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+    background_tasks.add_task(_enrich_group_item_metadata, item.id)
     return _item_out(item)
 
 
@@ -277,6 +300,8 @@ def update_group_watchlist_item(
 
     if "status" in body.model_fields_set:
         item.status = body.status
+    if "rating" in body.model_fields_set:
+        item.rating = body.rating
     db.commit()
     db.refresh(item)
     return _item_out(item)
@@ -300,4 +325,83 @@ def remove_group_watchlist_item(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     db.delete(item)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Group streaming services
+# ---------------------------------------------------------------------------
+
+def _get_union_services(db: Session, group_id: int) -> list[schemas.GroupServiceItem]:
+    memberships = db.query(models.GroupMembership).filter_by(group_id=group_id).all()
+    seen: set[int] = set()
+    result = []
+    for m in memberships:
+        for svc in m.user.streaming_services:
+            if svc.tmdb_provider_id not in seen:
+                seen.add(svc.tmdb_provider_id)
+                result.append(schemas.GroupServiceItem(
+                    tmdb_provider_id=svc.tmdb_provider_id,
+                    provider_name=svc.provider_name,
+                    provider_logo_path=svc.provider_logo_path,
+                ))
+    return result
+
+
+@router.get("/{group_id}/services", response_model=schemas.GroupServicesResponse)
+def get_group_services(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    _get_group_or_404(db, group_id)
+    _get_membership_or_403(db, group_id, current_user.id)
+
+    available = _get_union_services(db, group_id)
+    custom = db.query(models.GroupStreamingService).filter_by(group_id=group_id).all()
+
+    if custom:
+        active = [schemas.GroupServiceItem(
+            tmdb_provider_id=s.tmdb_provider_id,
+            provider_name=s.provider_name,
+            provider_logo_path=s.provider_logo_path,
+        ) for s in custom]
+        return schemas.GroupServicesResponse(active=active, available=available, is_custom=True)
+
+    return schemas.GroupServicesResponse(active=available, available=available, is_custom=False)
+
+
+@router.put("/{group_id}/services", response_model=schemas.GroupServicesResponse)
+def set_group_services(
+    group_id: int,
+    body: schemas.SetGroupServicesRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    _get_group_or_404(db, group_id)
+    _get_membership_or_403(db, group_id, current_user.id)
+
+    db.query(models.GroupStreamingService).filter_by(group_id=group_id).delete()
+    for svc in body.services:
+        db.add(models.GroupStreamingService(
+            group_id=group_id,
+            tmdb_provider_id=svc.tmdb_provider_id,
+            provider_name=svc.provider_name,
+            provider_logo_path=svc.provider_logo_path,
+        ))
+    db.commit()
+
+    available = _get_union_services(db, group_id)
+    return schemas.GroupServicesResponse(active=list(body.services), available=available, is_custom=True)
+
+
+@router.delete("/{group_id}/services", status_code=204)
+def reset_group_services(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    _get_group_or_404(db, group_id)
+    _get_membership_or_403(db, group_id, current_user.id)
+    db.query(models.GroupStreamingService).filter_by(group_id=group_id).delete()
     db.commit()

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api, { TMDB_IMAGE } from '../../services/api'
 import type { WatchlistItem, WatchlistStatus } from '../../types'
+import { STATUS_BUTTONS } from '../../types'
 import RatingButtons from './RatingButtons'
 
 interface Props {
@@ -9,12 +10,6 @@ interface Props {
   mediaType: 'movie' | 'tv'
   onClose: () => void
 }
-
-const STATUS_BUTTONS: { status: WatchlistStatus; label: string }[] = [
-  { status: 'want_to_watch', label: 'Want to Watch' },
-  { status: 'watching',      label: 'Watching'      },
-  { status: 'watched',       label: 'Watched'       },
-]
 
 export default function ContentModal({ tmdbId, mediaType, onClose }: Props) {
   const queryClient = useQueryClient()

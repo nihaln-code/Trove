@@ -17,6 +17,12 @@ export interface StreamingService {
 export type WatchlistStatus = 'want_to_watch' | 'watching' | 'watched'
 export type MediaType = 'movie' | 'tv'
 
+export const STATUS_BUTTONS: { status: WatchlistStatus; label: string }[] = [
+  { status: 'want_to_watch', label: 'Want to Watch' },
+  { status: 'watching',      label: 'Watching'      },
+  { status: 'watched',       label: 'Watched'       },
+]
+
 export interface WatchlistItem {
   id: number
   tmdb_id: number
@@ -59,6 +65,18 @@ export interface RecommendationItem {
   available_on: string[]
 }
 
+export interface GroupServiceItem {
+  tmdb_provider_id: number
+  provider_name: string
+  provider_logo_path: string | null
+}
+
+export interface GroupServicesResponse {
+  active: GroupServiceItem[]
+  available: GroupServiceItem[]
+  is_custom: boolean
+}
+
 export type GroupRole = 'owner' | 'member'
 
 export interface GroupMember {
@@ -83,6 +101,17 @@ export interface GroupDetail extends Group {
   members: GroupMember[]
 }
 
+export interface GroupRecommendationItem {
+  tmdb_id: number
+  media_type: MediaType
+  title: string
+  poster_path: string | null
+  overview: string | null
+  vote_average: number | null
+  reason: string
+  available_on: string[]
+}
+
 export interface GroupWatchlistItem {
   id: number
   tmdb_id: number
@@ -93,4 +122,5 @@ export interface GroupWatchlistItem {
   added_by_user_id: number
   added_by_name: string
   status: WatchlistStatus
+  rating: 1 | -1 | null
 }

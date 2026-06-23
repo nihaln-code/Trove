@@ -75,6 +75,14 @@ class RecommendationCache(Base):
     generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class GroupRecommendationCache(Base):
+    __tablename__ = "group_recommendation_cache"
+
+    group_id = Column(Integer, ForeignKey("groups.id"), primary_key=True)
+    items = Column(Text, nullable=False)
+    generated_at = Column(DateTime, default=datetime.utcnow)
+
+
 class GroupRole(str, enum.Enum):
     owner = "owner"
     member = "member"
@@ -121,6 +129,18 @@ class RecommendationReasonCache(Base):
     __table_args__ = (UniqueConstraint("user_id", "tmdb_id", "media_type"),)
 
 
+class GroupStreamingService(Base):
+    __tablename__ = "group_streaming_services"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    tmdb_provider_id = Column(Integer, nullable=False)
+    provider_name = Column(String, nullable=False)
+    provider_logo_path = Column(String, nullable=True)
+
+    __table_args__ = (UniqueConstraint("group_id", "tmdb_provider_id"),)
+
+
 class GroupWatchlistItem(Base):
     __tablename__ = "group_watchlist_items"
 
@@ -133,6 +153,9 @@ class GroupWatchlistItem(Base):
     added_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     added_at = Column(DateTime, default=datetime.utcnow)
     status = Column(Enum(WatchlistStatus), default=WatchlistStatus.want_to_watch, nullable=False)
+
+    rating = Column(Integer, nullable=True)  # 1 = liked, -1 = disliked
+    metadata_json = Column(Text, nullable=True)  # JSON: {genre_ids, cast, director, runtime, vote_average, original_language}
 
     group = relationship("Group", back_populates="items")
     added_by = relationship("User", foreign_keys=[added_by_user_id])

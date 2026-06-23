@@ -1,14 +1,11 @@
 import json
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.database import get_db, SessionLocal
-from app.config import settings
 from app import models, schemas, auth
+from app.routers.recommendations import tmdb_get, _parse_tmdb_metadata
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
-
-TMDB_BASE = "https://api.themoviedb.org/3"
 
 
 def _enrich_item_metadata(item_id: int) -> None:
@@ -17,29 +14,11 @@ def _enrich_item_metadata(item_id: int) -> None:
         item = db.query(models.WatchlistItem).filter_by(id=item_id).first()
         if not item or item.metadata_json:
             return
-        params = {
-            "api_key": settings.tmdb_api_key,
-            "language": "en-US",
-            "append_to_response": "credits",
-        }
-        with httpx.Client(timeout=10) as client:
-            r = client.get(f"{TMDB_BASE}/{item.media_type.value}/{item.tmdb_id}", params=params)
-            r.raise_for_status()
-            data = r.json()
-        credits = data.get("credits", {})
-        cast = [c["name"] for c in credits.get("cast", [])[:5]]
-        director = next(
-            (c["name"] for c in credits.get("crew", []) if c.get("job") == "Director"),
-            None,
+        data = tmdb_get(
+            f"/{item.media_type.value}/{item.tmdb_id}",
+            {"language": "en-US", "append_to_response": "credits"},
         )
-        meta = {
-            "genre_ids": [g["id"] for g in data.get("genres", [])] or data.get("genre_ids", []),
-            "cast": cast,
-            "director": director,
-            "runtime": data.get("runtime") or next(iter(data.get("episode_run_time") or []), None),
-            "vote_average": data.get("vote_average"),
-        }
-        item.metadata_json = json.dumps(meta)
+        item.metadata_json = json.dumps(_parse_tmdb_metadata(data))
         db.commit()
     except Exception:
         db.rollback()

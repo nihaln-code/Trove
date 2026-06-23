@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { TMDBContent, WatchlistItem, WatchlistStatus } from '../../types'
+import { STATUS_BUTTONS } from '../../types'
 import { TMDB_IMAGE } from '../../services/api'
 import api from '../../services/api'
 import ContentModal from './ContentModal'
@@ -10,12 +11,6 @@ interface Props {
   item: TMDBContent
   watchlistItems?: WatchlistItem[]
 }
-
-const STATUS_BUTTONS: { status: WatchlistStatus; label: string }[] = [
-  { status: 'want_to_watch', label: 'Want to Watch' },
-  { status: 'watching',      label: 'Watching'      },
-  { status: 'watched',       label: 'Watched'       },
-]
 
 export default function ContentCard({ item, watchlistItems = [] }: Props) {
   const queryClient = useQueryClient()
