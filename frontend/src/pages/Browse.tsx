@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import api from '../services/api'
 import ContentCard from '../components/content/ContentCard'
 import type { TMDBContent, WatchlistItem } from '../types'
+import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
 
 export default function Browse() {
   const [mediaType, setMediaType] = useState<'movie' | 'tv'>('movie')
@@ -215,8 +216,8 @@ export default function Browse() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => <RecommendationCardSkeleton key={i} />)}
         </div>
       ) : uniqueResults.length === 0 ? (
         <div className="py-20 text-center text-trove-muted">No results found</div>

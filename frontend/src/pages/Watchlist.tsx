@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api, { TMDB_IMAGE } from '../services/api'
 import type { WatchlistItem, WatchlistStatus } from '../types'
 import RatingButtons from '../components/content/RatingButtons'
+import { WatchlistItemSkeleton } from '../components/ui/Skeletons'
 
 const STATUS_LABELS: Record<WatchlistStatus, string> = {
   want_to_watch: 'Want to Watch',
@@ -47,8 +48,13 @@ export default function Watchlist() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
+      <div>
+        <div className="mb-6">
+          <h1 className="font-display text-3xl text-trove-text">My Watchlist</h1>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <WatchlistItemSkeleton key={i} />)}
+        </div>
       </div>
     )
   }

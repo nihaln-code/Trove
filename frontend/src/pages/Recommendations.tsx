@@ -6,6 +6,7 @@ import type { RecommendationItem, WatchlistItem, WatchlistStatus } from '../type
 import { STATUS_BUTTONS } from '../types'
 import ContentModal from '../components/content/ContentModal'
 import RatingButtons from '../components/content/RatingButtons'
+import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso + 'Z').getTime()) / 1000)
@@ -195,9 +196,8 @@ export default function Recommendations() {
       )}
 
       {isLoading && items.length === 0 && (
-        <div className="flex flex-col items-center gap-3 py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
-          <p className="text-sm text-trove-muted">Finding recommendations for you…</p>
+        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => <RecommendationCardSkeleton key={i} />)}
         </div>
       )}
 

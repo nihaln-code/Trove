@@ -7,6 +7,7 @@ import type { GroupDetail as GroupDetailType, GroupWatchlistItem, GroupRecommend
 import { STATUS_BUTTONS } from '../types'
 import GroupContentSearchResult from '../components/groups/GroupContentSearchResult'
 import RatingButtons from '../components/content/RatingButtons'
+import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
 
 const STATUS_LABELS: Record<WatchlistStatus, string> = {
   want_to_watch: 'Want to Watch',
@@ -632,8 +633,8 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
       </div>
 
       {isLoading && (
-        <div className="flex justify-center py-12">
-          <div className="h-7 w-7 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => <RecommendationCardSkeleton key={i} />)}
         </div>
       )}
 
