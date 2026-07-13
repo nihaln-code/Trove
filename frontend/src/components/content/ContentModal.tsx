@@ -85,7 +85,7 @@ export default function ContentModal({ tmdbId, mediaType, onClose }: Props) {
   }
 
   const availableProviders: { provider_id: number; provider_name: string; logo_path: string }[] =
-    Object.values(detail?.user_availability ?? {})
+    (Object.values(detail?.user_availability ?? {}) as { provider_id: number; provider_name: string; logo_path: string }[][])
       .flat()
       .filter(
         (p, i, arr) =>
