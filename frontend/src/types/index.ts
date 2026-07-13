@@ -45,6 +45,7 @@ export interface TMDBContent {
   first_air_date?: string
   media_type: MediaType
   genre_ids?: number[]
+  available_on?: string[]
 }
 
 export interface TMDBProvider {

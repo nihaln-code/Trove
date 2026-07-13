@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api, { TMDB_IMAGE } from '../services/api'
 import { useAuthStore } from '../store/auth'
-import type { GroupDetail as GroupDetailType, GroupWatchlistItem, GroupRecommendationItem, GroupServicesResponse, WatchlistItem, WatchlistStatus, TMDBContent } from '../types'
+import type { GroupDetail as GroupDetailType, GroupWatchlistItem, GroupRecommendationItem, GroupServicesResponse, WatchlistStatus, TMDBContent } from '../types'
 import { STATUS_BUTTONS } from '../types'
 import GroupContentSearchResult from '../components/groups/GroupContentSearchResult'
 import RatingButtons from '../components/content/RatingButtons'
@@ -484,9 +484,9 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
     consecutiveEmpty.current = 0
   }
 
-  const { data: watchlist = [] } = useQuery<WatchlistItem[]>({
-    queryKey: ['watchlist'],
-    queryFn: () => api.get('/watchlist').then((r) => r.data),
+  const { data: groupWatchlist = [] } = useQuery<GroupWatchlistItem[]>({
+    queryKey: ['group-watchlist', groupId],
+    queryFn: () => api.get(`/groups/${groupId}/watchlist`).then((r) => r.data),
   })
 
   const { data, isLoading } = useQuery<{ items: GroupRecommendationItem[]; generated_at: string }>({
@@ -521,26 +521,26 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
 
   const addToWatchlist = useMutation({
     mutationFn: ({ item, status }: { item: GroupRecommendationItem; status: WatchlistStatus }) =>
-      api.post('/watchlist', {
+      api.post(`/groups/${groupId}/watchlist`, {
         tmdb_id: item.tmdb_id, media_type: item.media_type,
         title: item.title, poster_path: item.poster_path, status,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-watchlist', groupId] }),
   })
 
   const updateWatchlist = useMutation({
     mutationFn: ({ id, status }: { id: number; status: WatchlistStatus }) =>
-      api.patch(`/watchlist/${id}`, { status }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+      api.patch(`/groups/${groupId}/watchlist/${id}`, { status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-watchlist', groupId] }),
   })
 
   const removeFromWatchlist = useMutation({
-    mutationFn: (id: number) => api.delete(`/watchlist/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
+    mutationFn: (id: number) => api.delete(`/groups/${groupId}/watchlist/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-watchlist', groupId] }),
   })
 
   function handleStatus(item: GroupRecommendationItem, status: WatchlistStatus) {
-    const entry = watchlist.find((w) => w.tmdb_id === item.tmdb_id && w.media_type === item.media_type)
+    const entry = groupWatchlist.find((w) => w.tmdb_id === item.tmdb_id && w.media_type === item.media_type)
     if (!entry) addToWatchlist.mutate({ item, status })
     else if (entry.status === status) removeFromWatchlist.mutate(entry.id)
     else updateWatchlist.mutate({ id: entry.id, status })
@@ -650,7 +650,7 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {items.map((item) => {
-              const entry = watchlist.find((w) => w.tmdb_id === item.tmdb_id && w.media_type === item.media_type)
+              const entry = groupWatchlist.find((w) => w.tmdb_id === item.tmdb_id && w.media_type === item.media_type)
               return (
                 <div
                   key={`${item.tmdb_id}-${item.media_type}`}
@@ -709,7 +709,13 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
                       {entry?.status === 'watched' && (
                         <div className="flex items-center justify-between border-t border-trove-border pt-1.5">
                           <span className="text-xs text-trove-muted">Rate it</span>
-                          <RatingButtons entryId={entry.id} currentRating={entry.rating} size="sm" />
+                          <RatingButtons
+                            entryId={entry.id}
+                            currentRating={entry.rating}
+                            size="sm"
+                            patchUrl={`/groups/${groupId}/watchlist/${entry.id}`}
+                            invalidateKey={['group-watchlist', groupId]}
+                          />
                         </div>
                       )}
                     </div>

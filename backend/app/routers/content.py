@@ -1,4 +1,6 @@
+import re
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -25,6 +27,35 @@ def _build_provider_region_map(user: models.User) -> dict[str, list[int]]:
         region = svc.region_override or user.default_region
         region_map[region].append(svc.tmdb_provider_id)
     return region_map
+
+
+def _get_availability(tmdb_id: int, media_type: str, user: models.User) -> list[str]:
+    user_provider_ids = {svc.tmdb_provider_id: svc.provider_name for svc in user.streaming_services}
+    if not user_provider_ids:
+        return []
+    try:
+        data = tmdb_get(f"/{media_type}/{tmdb_id}/watch/providers")
+    except Exception:
+        return []
+    user_regions = {svc.region_override or user.default_region for svc in user.streaming_services}
+    available_on = set()
+    for region in user_regions:
+        for p in data.get("results", {}).get(region, {}).get("flatrate", []):
+            if p["provider_id"] in user_provider_ids:
+                available_on.add(user_provider_ids[p["provider_id"]])
+    return list(available_on)
+
+
+def _attach_availability(items: list[dict], user: models.User) -> list[dict]:
+    if not items:
+        return items
+
+    def attach(item: dict) -> dict:
+        item["available_on"] = _get_availability(item["id"], item["media_type"], user)
+        return item
+
+    with ThreadPoolExecutor(max_workers=min(len(items), 20)) as pool:
+        return list(pool.map(attach, items))
 
 
 @router.get("/providers")
@@ -88,6 +119,7 @@ def browse(
                 all_results.append(item)
 
     all_results.sort(key=lambda x: x.get("popularity", 0), reverse=True)
+    all_results = _attach_availability(all_results, current_user)
     return {"results": all_results, "page": page}
 
 
@@ -97,11 +129,26 @@ def search(
     page: int = Query(1, ge=1),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    data = tmdb_get("/search/multi", {"query": query, "page": page, "language": "en-US"})
+    normalized_query = re.sub(r"\s+", " ", query).strip()
+    data = tmdb_get("/search/multi", {"query": normalized_query, "page": page, "language": "en-US"})
     results = [
         r for r in data.get("results", [])
         if r.get("media_type") in ("movie", "tv")
     ]
+
+    # TMDB's own fuzzy matching can miss titles when spaces/hyphens are
+    # missing or extra (e.g. "spiderman" vs "Spider-Man"); retry once with
+    # them stripped out entirely if the first pass found nothing.
+    if not results and page == 1:
+        collapsed_query = re.sub(r"[\s\-]+", "", normalized_query)
+        if collapsed_query != normalized_query:
+            data = tmdb_get("/search/multi", {"query": collapsed_query, "page": page, "language": "en-US"})
+            results = [
+                r for r in data.get("results", [])
+                if r.get("media_type") in ("movie", "tv")
+            ]
+
+    results = _attach_availability(results, current_user)
     return {"results": results, "total_pages": data.get("total_pages", 1)}
 
 

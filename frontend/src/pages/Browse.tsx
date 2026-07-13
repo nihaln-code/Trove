@@ -82,9 +82,15 @@ export default function Browse() {
     return () => observer.disconnect()
   }, [onIntersect])
 
+  // Live search: debounce so we don't fire a request on every keystroke
+  useEffect(() => {
+    const handle = setTimeout(() => setSearch(searchInput.trim()), 400)
+    return () => clearTimeout(handle)
+  }, [searchInput])
+
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
-    setSearch(searchInput)
+    setSearch(searchInput.trim())
   }
 
   function clearSearch() {

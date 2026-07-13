@@ -62,7 +62,7 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
   return (
     <>
     <div
-      className="group relative overflow-hidden rounded-xl bg-trove-card transition-all duration-200 hover:-translate-y-1 hover:ring-1 hover:ring-trove-accent/30 hover:shadow-xl hover:shadow-black/50 cursor-pointer"
+      className="flex flex-col overflow-hidden rounded-xl border border-trove-border bg-trove-card cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:ring-1 hover:ring-trove-accent/30 hover:shadow-xl hover:shadow-black/50"
       onClick={() => setShowModal(true)}
     >
       <div className="aspect-[2/3] overflow-hidden bg-trove-border">
@@ -70,7 +70,7 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
           <img
             src={poster}
             alt={title}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover"
             loading="lazy"
           />
         ) : (
@@ -80,15 +80,25 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
         )}
       </div>
 
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/95 via-black/50 to-transparent p-3 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100">
-        <p className="mb-1 line-clamp-2 text-sm font-semibold text-white">{title}</p>
-        <div className="mb-3 flex items-center gap-2 text-xs text-gray-300">
+      <div className="flex flex-1 flex-col p-3">
+        <p className="mb-1 line-clamp-2 text-sm font-semibold text-trove-text">{title}</p>
+        <div className="mb-2 flex items-center gap-2 text-xs text-trove-muted">
           {year && <span>{year}</span>}
           {item.vote_average > 0 && <span>★ {item.vote_average.toFixed(1)}</span>}
-          <span className="rounded bg-white/20 px-1 capitalize">{item.media_type}</span>
+          <span className="rounded bg-trove-border px-1 capitalize">{item.media_type}</span>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        {item.available_on && item.available_on.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1">
+            {item.available_on.map((svc) => (
+              <span key={svc} className="rounded bg-trove-accent/20 px-1.5 py-0.5 text-xs text-trove-accent">
+                {svc}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-auto flex flex-col gap-1.5">
           {STATUS_BUTTONS.map(({ status, label }) => {
             const isActive = watchlistEntry?.status === status
             return (
@@ -99,7 +109,7 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
                 className={`flex w-full cursor-pointer items-center justify-center gap-1.5 rounded py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
                   isActive
                     ? 'bg-trove-accent text-white'
-                    : 'bg-white/10 text-white hover:bg-white/20'
+                    : 'bg-trove-surface text-trove-muted hover:bg-trove-border hover:text-trove-text'
                 }`}
               >
                 {isActive && (
@@ -112,8 +122,8 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
             )
           })}
           {watchlistEntry?.status === 'watched' && (
-            <div className="flex items-center justify-between border-t border-white/10 pt-1.5">
-              <span className="text-xs text-white/50">Rate it</span>
+            <div className="flex items-center justify-between border-t border-trove-border pt-1.5">
+              <span className="text-xs text-trove-muted">Rate it</span>
               <RatingButtons entryId={watchlistEntry.id} currentRating={watchlistEntry.rating} size="sm" />
             </div>
           )}

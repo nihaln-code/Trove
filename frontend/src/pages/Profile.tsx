@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import Fuse from 'fuse.js'
 import { useAuthStore } from '../store/auth'
 import api, { TMDB_IMAGE } from '../services/api'
 import type { StreamingService, TMDBProvider } from '../types'
@@ -69,6 +70,14 @@ export default function Profile() {
   })
 
   const myProviderIds = new Set(myServices.map((s) => s.tmdb_provider_id))
+
+  const providerFuse = useMemo(
+    () => new Fuse(allProviders, { keys: ['provider_name'], threshold: 0.35, ignoreLocation: true }),
+    [allProviders],
+  )
+  const filteredProviders = providerSearch
+    ? providerFuse.search(providerSearch).map((r) => r.item)
+    : allProviders
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -224,9 +233,7 @@ export default function Profile() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto sm:grid-cols-3">
-                {allProviders.filter((p) =>
-                  p.provider_name.toLowerCase().includes(providerSearch.toLowerCase())
-                ).map((provider) => {
+                {filteredProviders.map((provider) => {
                   const isAdded = myProviderIds.has(provider.provider_id)
                   return (
                     <button

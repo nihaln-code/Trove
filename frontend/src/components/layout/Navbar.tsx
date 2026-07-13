@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '../../store/auth'
 
 const navItems = [
@@ -13,6 +14,7 @@ export default function Navbar() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const [avatarError, setAvatarError] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -20,6 +22,7 @@ export default function Navbar() {
 
   function handleLogout() {
     logout()
+    queryClient.clear()
     navigate('/')
   }
 
