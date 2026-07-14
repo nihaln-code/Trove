@@ -98,6 +98,7 @@ def _build_taste_profile(user: models.User) -> dict:
     genre_scores: dict[int, float] = defaultdict(float)
     cast_scores: dict[str, float] = defaultdict(float)
     director_scores: dict[str, float] = defaultdict(float)
+    language_counts: dict[str, int] = defaultdict(int)
 
     for item in user.watchlist:
         if not item.metadata_json:
@@ -111,6 +112,9 @@ def _build_taste_profile(user: models.User) -> dict:
             continue
         for gid in meta.get("genre_ids", []):
             genre_scores[gid] += weight
+        lang = meta.get("original_language")
+        if lang:
+            language_counts[lang] += 1
         if weight > 0:
             for name in meta.get("cast", []):
                 cast_scores[name] += weight * 0.4
@@ -125,6 +129,7 @@ def _build_taste_profile(user: models.User) -> dict:
     avoided_genres = [gid for gid, s in genre_scores.items() if s < 0]
     top_cast = [n for n, _ in sorted(cast_scores.items(), key=lambda x: x[1], reverse=True)[:15]]
     top_directors = [n for n, _ in sorted(director_scores.items(), key=lambda x: x[1], reverse=True)[:8]]
+    top_languages = [lang for lang, _ in sorted(language_counts.items(), key=lambda x: x[1], reverse=True)]
 
     return {
         "top_genres": top_genres[:6],
@@ -132,6 +137,7 @@ def _build_taste_profile(user: models.User) -> dict:
         "top_cast": top_cast,
         "top_directors": top_directors,
         "genre_scores": dict(genre_scores),
+        "top_languages": top_languages,
     }
 
 
@@ -168,8 +174,10 @@ def _run_generation(user: models.User, page: int = 1) -> list[dict]:
         return _run_tmdb_fallback(user, page)
 
     def fetch_discover(args: tuple) -> list[dict]:
-        genre_id, media_type, region, provider_ids = args
+        genre_id, media_type, region, provider_ids, language = args
         try:
+            # Non-English films have far fewer TMDB votes; a high floor would empty the pool
+            vote_floor = 10 if language and language != "en" else 50
             params: dict = {
                 "watch_region": region,
                 "with_watch_providers": "|".join(str(p) for p in provider_ids),
@@ -177,8 +185,10 @@ def _run_generation(user: models.User, page: int = 1) -> list[dict]:
                 "page": page,
                 "language": "en-US",
                 "sort_by": "popularity.desc",
-                "vote_count.gte": 50,
+                "vote_count.gte": vote_floor,
             }
+            if language:
+                params["with_original_language"] = language
             if profile["avoided_genres"]:
                 params["without_genres"] = ",".join(str(g) for g in profile["avoided_genres"])
             data = tmdb_get(f"/discover/{media_type}", params)
@@ -190,11 +200,24 @@ def _run_generation(user: models.User, page: int = 1) -> list[dict]:
         except Exception:
             return []
 
+    # Non-English dominant tastes get language-filtered queries so popularity
+    # ranking doesn't bury their content under English results.
+    top_languages = profile.get("top_languages", [])
+    non_english = [l for l in top_languages if l != "en"]
+    if non_english and "en" not in top_languages:
+        lang_passes: list[str | None] = non_english[:2]
+    elif non_english:
+        lang_passes = non_english[:1] + [None]
+    else:
+        lang_passes = [None]
+
+    genre_limit = 5 if non_english else 3
     tasks = [
-        (gid, mt, region, pids)
-        for gid in profile["top_genres"][:3]
+        (gid, mt, region, pids, lang)
+        for gid in profile["top_genres"][:genre_limit]
         for mt in ("movie", "tv")
         for region, pids in region_map.items()
+        for lang in lang_passes
     ]
 
     candidates: list[dict] = []
