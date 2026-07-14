@@ -175,7 +175,7 @@ export default function Profile() {
                   className="rounded border border-trove-border bg-trove-card px-2 py-1 text-xs text-trove-muted outline-none focus:border-trove-accent"
                   title="Region override (leave blank to use default)"
                 >
-                  <option value="">Default region</option>
+                  <option value="">Default ({user?.default_region ?? 'US'})</option>
                   {REGIONS.map((r) => (
                     <option key={r.code} value={r.code}>{r.code}</option>
                   ))}
