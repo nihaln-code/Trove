@@ -283,6 +283,15 @@ def _run_group_generation(
 # Endpoints
 # ---------------------------------------------------------------------------
 
+def _get_based_on(group_items: list[models.GroupWatchlistItem], mode: str) -> str:
+    """Which data source recommendations actually came from — can differ from the
+    requested mode when group_watchlist falls back to member tastes (too few
+    enriched shared-watchlist items)."""
+    if mode == "member_tastes":
+        return "member_tastes"
+    return "shared_watchlist" if _build_group_taste_profile(group_items) is not None else "member_tastes"
+
+
 @router.get("/{group_id}/recommendations")
 def get_group_recommendations(
     group_id: int,
@@ -294,12 +303,17 @@ def get_group_recommendations(
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
 
+    based_on = None
+    if page == 1:
+        group_items = db.query(models.GroupWatchlistItem).filter_by(group_id=group_id).all()
+        based_on = _get_based_on(group_items, mode)
+
     # member_tastes mode is never cached — personal watchlists change often
     if mode == "member_tastes":
         results = _run_group_generation(group_id, current_user, db, page=page, mode=mode)
         if page > 1:
             return results
-        return {"items": results, "generated_at": datetime.utcnow().isoformat()}
+        return {"items": results, "generated_at": datetime.utcnow().isoformat(), "based_on": based_on}
 
     if page > 1:
         return _run_group_generation(group_id, current_user, db, page=page, mode=mode)
@@ -308,12 +322,12 @@ def get_group_recommendations(
     if cache:
         stale = datetime.utcnow() - cache.generated_at > timedelta(minutes=CACHE_TTL_MINUTES)
         if not stale:
-            return {"items": json.loads(cache.items), "generated_at": cache.generated_at.isoformat()}
+            return {"items": json.loads(cache.items), "generated_at": cache.generated_at.isoformat(), "based_on": based_on}
         results = _run_group_generation(group_id, current_user, db)
         cache.items = json.dumps(results)
         cache.generated_at = datetime.utcnow()
         db.commit()
-        return {"items": results, "generated_at": cache.generated_at.isoformat()}
+        return {"items": results, "generated_at": cache.generated_at.isoformat(), "based_on": based_on}
 
     results = _run_group_generation(group_id, current_user, db)
     cache = models.GroupRecommendationCache(
@@ -323,7 +337,7 @@ def get_group_recommendations(
     )
     db.add(cache)
     db.commit()
-    return {"items": results, "generated_at": cache.generated_at.isoformat()}
+    return {"items": results, "generated_at": cache.generated_at.isoformat(), "based_on": based_on}
 
 
 @router.post("/{group_id}/recommendations/refresh")
@@ -336,10 +350,13 @@ def refresh_group_recommendations(
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
 
+    group_items = db.query(models.GroupWatchlistItem).filter_by(group_id=group_id).all()
+    based_on = _get_based_on(group_items, mode)
+
     results = _run_group_generation(group_id, current_user, db, mode=mode)
 
     if mode == "member_tastes":
-        return {"items": results, "generated_at": datetime.utcnow().isoformat()}
+        return {"items": results, "generated_at": datetime.utcnow().isoformat(), "based_on": based_on}
 
     cache = db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).first()
     if cache is None:
@@ -348,4 +365,4 @@ def refresh_group_recommendations(
     cache.items = json.dumps(results)
     cache.generated_at = datetime.utcnow()
     db.commit()
-    return {"items": results, "generated_at": cache.generated_at.isoformat()}
+    return {"items": results, "generated_at": cache.generated_at.isoformat(), "based_on": based_on}

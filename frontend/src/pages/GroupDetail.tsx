@@ -458,8 +458,8 @@ function GroupServicesSection({ groupId }: { groupId: number }) {
 type RecommendationMode = 'group_watchlist' | 'member_tastes'
 
 const MODE_LABELS: Record<RecommendationMode, string> = {
-  group_watchlist: 'Shared Watchlist',
-  member_tastes: 'Member Tastes',
+  group_watchlist: 'Based on Watchlist',
+  member_tastes: 'Based on Member Tastes',
 }
 
 const MODE_DESCRIPTIONS: Record<RecommendationMode, string> = {
@@ -489,7 +489,7 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
     queryFn: () => api.get(`/groups/${groupId}/watchlist`).then((r) => r.data),
   })
 
-  const { data, isLoading } = useQuery<{ items: GroupRecommendationItem[]; generated_at: string }>({
+  const { data, isLoading } = useQuery<{ items: GroupRecommendationItem[]; generated_at: string; based_on: 'shared_watchlist' | 'member_tastes' }>({
     queryKey: ['group-recommendations', groupId, mode],
     queryFn: () => api.get(`/groups/${groupId}/recommendations`, { params: { mode } }).then((r) => r.data),
     staleTime: Infinity,
@@ -512,7 +512,7 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
   const refresh = useMutation({
     mutationFn: () =>
       api.post(`/groups/${groupId}/recommendations/refresh`, null, { params: { mode } }).then((r) => r.data),
-    onSuccess: (data: { items: GroupRecommendationItem[]; generated_at: string }) => {
+    onSuccess: (data: { items: GroupRecommendationItem[]; generated_at: string; based_on: 'shared_watchlist' | 'member_tastes' }) => {
       queryClient.setQueryData(['group-recommendations', groupId, mode], data)
       setItems(data.items ?? [])
       resetPagination()
@@ -631,6 +631,12 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
           </button>
         </div>
       </div>
+
+      {!isLoading && mode === 'group_watchlist' && data?.based_on === 'member_tastes' && (
+        <div className="mb-4 rounded-lg border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          Not enough data in your shared watchlist yet, so these are based on member tastes instead. Add at least 3 titles to the shared watchlist to base recommendations on that.
+        </div>
+      )}
 
       {isLoading && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
