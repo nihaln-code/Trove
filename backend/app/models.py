@@ -154,10 +154,24 @@ class GroupWatchlistItem(Base):
     added_at = Column(DateTime, default=datetime.utcnow)
     status = Column(Enum(WatchlistStatus), default=WatchlistStatus.want_to_watch, nullable=False)
 
-    rating = Column(Integer, nullable=True)  # 1 = liked, -1 = disliked
     metadata_json = Column(Text, nullable=True)  # JSON: {genre_ids, cast, director, runtime, vote_average, original_language}
 
     group = relationship("Group", back_populates="items")
     added_by = relationship("User", foreign_keys=[added_by_user_id])
+    member_ratings = relationship("GroupItemRating", back_populates="group_watchlist_item", cascade="all, delete-orphan")
 
     __table_args__ = (UniqueConstraint("group_id", "tmdb_id", "media_type"),)
+
+
+class GroupItemRating(Base):
+    __tablename__ = "group_item_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_watchlist_item_id = Column(Integer, ForeignKey("group_watchlist_items.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    rating = Column(Integer, nullable=False)  # 1 = liked, -1 = disliked
+
+    group_watchlist_item = relationship("GroupWatchlistItem", back_populates="member_ratings")
+    user = relationship("User")
+
+    __table_args__ = (UniqueConstraint("group_watchlist_item_id", "user_id"),)

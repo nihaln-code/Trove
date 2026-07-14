@@ -64,7 +64,12 @@ def _group_detail_out(group: models.Group) -> schemas.GroupDetailOut:
     )
 
 
-def _item_out(item: models.GroupWatchlistItem) -> schemas.GroupWatchlistItemOut:
+def _item_out(item: models.GroupWatchlistItem, current_user_id: int) -> schemas.GroupWatchlistItemOut:
+    liked_by = [
+        schemas.GroupItemLiker(user_id=r.user_id, name=r.user.name)
+        for r in item.member_ratings if r.rating == 1
+    ]
+    my_rating = next((r.rating for r in item.member_ratings if r.user_id == current_user_id), None)
     return schemas.GroupWatchlistItemOut(
         id=item.id,
         tmdb_id=item.tmdb_id,
@@ -75,7 +80,10 @@ def _item_out(item: models.GroupWatchlistItem) -> schemas.GroupWatchlistItemOut:
         added_by_user_id=item.added_by_user_id,
         added_by_name=item.added_by.name,
         status=item.status,
-        rating=item.rating,
+        like_count=sum(1 for r in item.member_ratings if r.rating == 1),
+        dislike_count=sum(1 for r in item.member_ratings if r.rating == -1),
+        liked_by=liked_by,
+        my_rating=my_rating,
     )
 
 
@@ -241,7 +249,7 @@ def get_group_watchlist(
     if status:
         items = [i for i in items if i.status == status]
     items = sorted(items, key=lambda i: i.added_at, reverse=True)
-    return [_item_out(i) for i in items]
+    return [_item_out(i, current_user.id) for i in items]
 
 
 @router.post("/{group_id}/watchlist", response_model=schemas.GroupWatchlistItemOut, status_code=201)
@@ -276,7 +284,7 @@ def add_group_watchlist_item(
     db.commit()
     db.refresh(item)
     background_tasks.add_task(_enrich_group_item_metadata, item.id)
-    return _item_out(item)
+    return _item_out(item, current_user.id)
 
 
 @router.patch("/{group_id}/watchlist/{item_id}", response_model=schemas.GroupWatchlistItemOut)
@@ -300,11 +308,49 @@ def update_group_watchlist_item(
 
     if "status" in body.model_fields_set:
         item.status = body.status
-    if "rating" in body.model_fields_set:
-        item.rating = body.rating
     db.commit()
     db.refresh(item)
-    return _item_out(item)
+    return _item_out(item, current_user.id)
+
+
+@router.put("/{group_id}/watchlist/{item_id}/rating", response_model=schemas.GroupWatchlistItemOut)
+def set_group_item_rating(
+    group_id: int,
+    item_id: int,
+    body: schemas.SetGroupItemRatingRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    _get_group_or_404(db, group_id)
+    _get_membership_or_403(db, group_id, current_user.id)
+
+    item = (
+        db.query(models.GroupWatchlistItem)
+        .filter_by(id=item_id, group_id=group_id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    existing = (
+        db.query(models.GroupItemRating)
+        .filter_by(group_watchlist_item_id=item_id, user_id=current_user.id)
+        .first()
+    )
+    if body.rating is None:
+        if existing:
+            db.delete(existing)
+    elif existing:
+        existing.rating = body.rating
+    else:
+        db.add(models.GroupItemRating(
+            group_watchlist_item_id=item_id,
+            user_id=current_user.id,
+            rating=body.rating,
+        ))
+    db.commit()
+    db.refresh(item)
+    return _item_out(item, current_user.id)
 
 
 @router.delete("/{group_id}/watchlist/{item_id}", status_code=204)

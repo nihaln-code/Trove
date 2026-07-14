@@ -4,7 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 from app.config import settings
+from app.database import get_db
 from app import models, schemas, auth
 
 router = APIRouter(prefix="/content", tags=["content"])
@@ -187,3 +189,20 @@ def get_detail(
 
     detail["user_availability"] = availability
     return detail
+
+
+@router.get("/{media_type}/{tmdb_id}/ratings", response_model=schemas.ContentRatingsOut)
+def get_content_ratings(
+    media_type: str,
+    tmdb_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """App-wide like/dislike counts for a title, tallied from every user's personal watchlist."""
+    if media_type not in ("movie", "tv"):
+        from fastapi import HTTPException
+        raise HTTPException(400, "media_type must be movie or tv")
+
+    likes = db.query(models.WatchlistItem).filter_by(tmdb_id=tmdb_id, media_type=media_type, rating=1).count()
+    dislikes = db.query(models.WatchlistItem).filter_by(tmdb_id=tmdb_id, media_type=media_type, rating=-1).count()
+    return {"likes": likes, "dislikes": dislikes}

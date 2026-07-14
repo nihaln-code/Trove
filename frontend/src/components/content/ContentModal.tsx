@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api, { TMDB_IMAGE } from '../../services/api'
-import type { WatchlistItem, WatchlistStatus } from '../../types'
+import type { ContentRatings, WatchlistItem, WatchlistStatus } from '../../types'
 import { STATUS_BUTTONS } from '../../types'
 import RatingButtons from './RatingButtons'
 
@@ -26,6 +26,12 @@ export default function ContentModal({ tmdbId, mediaType, onClose }: Props) {
   })
 
   const entry = watchlist.find((w) => w.tmdb_id === tmdbId && w.media_type === mediaType)
+
+  const { data: ratings } = useQuery<ContentRatings>({
+    queryKey: ['content-ratings', mediaType, tmdbId],
+    queryFn: () => api.get(`/content/${mediaType}/${tmdbId}/ratings`).then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  })
 
   const addMutation = useMutation({
     mutationFn: (status: WatchlistStatus) =>
@@ -143,8 +149,17 @@ export default function ContentModal({ tmdbId, mediaType, onClose }: Props) {
             <div className="min-w-0 flex-1">
               <h2 className="mb-1 font-display text-2xl italic text-trove-text leading-tight">{title}</h2>
 
-              {meta.length > 0 && (
-                <p className="mb-4 text-sm text-trove-muted">{meta.join(' · ')}</p>
+              {(meta.length > 0 || (ratings && (ratings.likes > 0 || ratings.dislikes > 0))) && (
+                <div className="mb-4">
+                  {meta.length > 0 && (
+                    <p className="text-sm text-trove-muted">{meta.join(' · ')}</p>
+                  )}
+                  {ratings && (ratings.likes > 0 || ratings.dislikes > 0) && (
+                    <p className="text-xs text-trove-muted">
+                      {ratings.likes} liked it · {ratings.dislikes} didn't
+                    </p>
+                  )}
+                </div>
               )}
 
               {detail.genres?.length > 0 && (

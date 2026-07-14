@@ -192,6 +192,11 @@ class JoinGroupRequest(BaseModel):
         return v.upper()
 
 
+class GroupItemLiker(BaseModel):
+    user_id: int
+    name: str
+
+
 class GroupWatchlistItemOut(BaseModel):
     id: int
     tmdb_id: int
@@ -202,7 +207,10 @@ class GroupWatchlistItemOut(BaseModel):
     added_by_user_id: int
     added_by_name: str
     status: WatchlistStatus
-    rating: Optional[int] = None
+    like_count: int = 0
+    dislike_count: int = 0
+    liked_by: list[GroupItemLiker] = []
+    my_rating: Optional[int] = None
 
 
 class AddGroupWatchlistItemRequest(BaseModel):
@@ -231,6 +239,9 @@ class SetGroupServicesRequest(BaseModel):
 
 class UpdateGroupWatchlistItemRequest(BaseModel):
     status: Optional[WatchlistStatus] = None
+
+
+class SetGroupItemRatingRequest(BaseModel):
     rating: Optional[int] = None
 
     @field_validator("rating")
@@ -239,3 +250,8 @@ class UpdateGroupWatchlistItemRequest(BaseModel):
         if v is not None and v not in (1, -1):
             raise ValueError("rating must be 1 or -1")
         return v
+
+
+class ContentRatingsOut(BaseModel):
+    likes: int
+    dislikes: int

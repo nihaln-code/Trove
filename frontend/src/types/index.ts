@@ -113,6 +113,11 @@ export interface GroupRecommendationItem {
   available_on: string[]
 }
 
+export interface GroupItemLiker {
+  user_id: number
+  name: string
+}
+
 export interface GroupWatchlistItem {
   id: number
   tmdb_id: number
@@ -123,5 +128,13 @@ export interface GroupWatchlistItem {
   added_by_user_id: number
   added_by_name: string
   status: WatchlistStatus
-  rating: 1 | -1 | null
+  like_count: number
+  dislike_count: number
+  liked_by: GroupItemLiker[]
+  my_rating: 1 | -1 | null
+}
+
+export interface ContentRatings {
+  likes: number
+  dislikes: number
 }

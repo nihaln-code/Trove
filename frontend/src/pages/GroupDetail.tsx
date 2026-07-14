@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/auth'
 import type { GroupDetail as GroupDetailType, GroupWatchlistItem, GroupRecommendationItem, GroupServicesResponse, WatchlistStatus, TMDBContent } from '../types'
 import { STATUS_BUTTONS } from '../types'
 import GroupContentSearchResult from '../components/groups/GroupContentSearchResult'
-import RatingButtons from '../components/content/RatingButtons'
+import GroupRatingWidget from '../components/groups/GroupRatingWidget'
 import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
 
 const STATUS_LABELS: Record<WatchlistStatus, string> = {
@@ -250,14 +250,15 @@ export default function GroupDetail() {
                   </button>
                 </div>
                 {item.status === 'watched' && (
-                  <div className="flex items-center justify-between border-t border-trove-border pt-2">
-                    <span className="text-xs text-trove-muted">Rate it</span>
-                    <RatingButtons
-                      entryId={item.id}
-                      currentRating={item.rating}
+                  <div className="border-t border-trove-border pt-2">
+                    <GroupRatingWidget
+                      groupId={groupId}
+                      itemId={item.id}
+                      likeCount={item.like_count}
+                      dislikeCount={item.dislike_count}
+                      likedBy={item.liked_by}
+                      myRating={item.my_rating}
                       size="sm"
-                      patchUrl={`/groups/${groupId}/watchlist/${item.id}`}
-                      invalidateKey={['group-watchlist', groupId]}
                     />
                   </div>
                 )}
@@ -713,14 +714,15 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
                         )
                       })}
                       {entry?.status === 'watched' && (
-                        <div className="flex items-center justify-between border-t border-trove-border pt-1.5">
-                          <span className="text-xs text-trove-muted">Rate it</span>
-                          <RatingButtons
-                            entryId={entry.id}
-                            currentRating={entry.rating}
+                        <div className="border-t border-trove-border pt-1.5">
+                          <GroupRatingWidget
+                            groupId={groupId}
+                            itemId={entry.id}
+                            likeCount={entry.like_count}
+                            dislikeCount={entry.dislike_count}
+                            likedBy={entry.liked_by}
+                            myRating={entry.my_rating}
                             size="sm"
-                            patchUrl={`/groups/${groupId}/watchlist/${entry.id}`}
-                            invalidateKey={['group-watchlist', groupId]}
                           />
                         </div>
                       )}

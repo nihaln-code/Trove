@@ -15,8 +15,9 @@ Base.metadata.create_all(bind=engine)
 with engine.connect() as conn:
     conn.execute(text("ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS rating INTEGER"))
     conn.execute(text("ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS metadata_json TEXT"))
-    conn.execute(text("ALTER TABLE group_watchlist_items ADD COLUMN IF NOT EXISTS rating INTEGER"))
     conn.execute(text("ALTER TABLE group_watchlist_items ADD COLUMN IF NOT EXISTS metadata_json TEXT"))
+    # Superseded by per-member ratings in group_item_ratings
+    conn.execute(text("ALTER TABLE group_watchlist_items DROP COLUMN IF EXISTS rating"))
     conn.commit()
 
 
