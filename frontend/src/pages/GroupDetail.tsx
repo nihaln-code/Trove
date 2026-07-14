@@ -31,6 +31,7 @@ export default function GroupDetail() {
   const [copied, setCopied] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [search, setSearch] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const { data: group, isLoading, isError, error } = useQuery<GroupDetailType>({
     queryKey: ['group', groupId],
@@ -127,8 +128,7 @@ export default function GroupDetail() {
           </button>
           {isOwner ? (
             <button
-              onClick={() => deleteGroup.mutate()}
-              disabled={deleteGroup.isPending}
+              onClick={() => setShowDeleteConfirm(true)}
               className="cursor-pointer rounded-lg border border-trove-border px-3 py-2 text-sm text-trove-muted transition-colors hover:border-red-400 hover:text-red-400"
             >
               Delete Group
@@ -270,6 +270,39 @@ export default function GroupDetail() {
 
       {/* Group recommendations */}
       <GroupRecommendations groupId={groupId} />
+
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-trove-border bg-trove-surface p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="mb-2 text-lg font-semibold text-trove-text">Delete "{group.name}"?</h2>
+            <p className="mb-6 text-sm text-trove-muted">
+              This permanently deletes the group, its shared watchlist, and its recommendations for
+              every member. This can't be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="cursor-pointer rounded-lg border border-trove-border px-4 py-2 text-sm text-trove-muted transition-colors hover:text-trove-text"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteGroup.mutate()}
+                disabled={deleteGroup.isPending}
+                className="cursor-pointer rounded-lg bg-red-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-60"
+              >
+                {deleteGroup.isPending ? 'Deleting...' : 'Delete Group'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
