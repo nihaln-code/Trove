@@ -231,6 +231,10 @@ def delete_group(
     _get_membership_or_403(db, group_id, current_user.id)
     if group.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can delete the group")
+
+    # Not covered by Group's ORM cascades (members/items) — remove explicitly first
+    db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).delete()
+    db.query(models.GroupStreamingService).filter_by(group_id=group_id).delete()
     db.delete(group)
     db.commit()
 

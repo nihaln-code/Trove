@@ -12,6 +12,8 @@ export default function Browse() {
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const genreScrollRef = useRef<HTMLDivElement>(null)
 
   const { data: services } = useQuery({
     queryKey: ['streaming-services'],
@@ -91,11 +93,18 @@ export default function Browse() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     setSearch(searchInput.trim())
+    searchInputRef.current?.blur()
   }
 
   function clearSearch() {
     setSearch('')
     setSearchInput('')
+  }
+
+  function scrollGenres(direction: -1 | 1) {
+    const el = genreScrollRef.current
+    if (!el) return
+    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' })
   }
 
   if (!services?.length) {
@@ -143,6 +152,7 @@ export default function Browse() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
               </svg>
               <input
+                ref={searchInputRef}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search movies & shows..."
@@ -193,30 +203,52 @@ export default function Browse() {
 
         {/* Row 2: genre pills */}
         {!isSearching && genres && genres.length > 0 && (
-          <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1">
+          <div className="relative flex items-center">
             <button
-              onClick={() => setGenreId(null)}
-              className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                !genreId
-                  ? 'border-trove-accent bg-trove-accent text-white'
-                  : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
-              }`}
+              onClick={() => scrollGenres(-1)}
+              aria-label="Scroll genres left"
+              className="absolute left-0 z-10 flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-full border border-trove-border bg-trove-surface text-trove-muted shadow-md transition-colors hover:border-trove-accent hover:text-trove-text"
             >
-              All
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+              </svg>
             </button>
-            {genres.map((g: { id: number; name: string }) => (
+
+            <div ref={genreScrollRef} className="scrollbar-hide flex gap-2 overflow-x-auto px-9 pb-1">
               <button
-                key={g.id}
-                onClick={() => setGenreId(g.id)}
+                onClick={() => setGenreId(null)}
                 className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                  genreId === g.id
+                  !genreId
                     ? 'border-trove-accent bg-trove-accent text-white'
                     : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
                 }`}
               >
-                {g.name}
+                All
               </button>
-            ))}
+              {genres.map((g: { id: number; name: string }) => (
+                <button
+                  key={g.id}
+                  onClick={() => setGenreId(g.id)}
+                  className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    genreId === g.id
+                      ? 'border-trove-accent bg-trove-accent text-white'
+                      : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
+                  }`}
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => scrollGenres(1)}
+              aria-label="Scroll genres right"
+              className="absolute right-0 z-10 flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-full border border-trove-border bg-trove-surface text-trove-muted shadow-md transition-colors hover:border-trove-accent hover:text-trove-text"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
           </div>
         )}
       </div>
