@@ -171,6 +171,36 @@ def join_group(
     return _group_detail_out(group)
 
 
+@router.get("/preview/{invite_code}", response_model=schemas.GroupPreviewOut)
+def preview_group(
+    invite_code: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Look up a group by invite code without requiring membership, so an
+    invite link can show what you're joining before you commit."""
+    group = (
+        db.query(models.Group)
+        .filter(models.Group.invite_code == invite_code.upper())
+        .first()
+    )
+    if not group:
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+
+    already_member = (
+        db.query(models.GroupMembership)
+        .filter_by(group_id=group.id, user_id=current_user.id)
+        .first()
+        is not None
+    )
+    return schemas.GroupPreviewOut(
+        id=group.id,
+        name=group.name,
+        member_count=len(group.members),
+        already_member=already_member,
+    )
+
+
 @router.get("/{group_id}", response_model=schemas.GroupDetailOut)
 def get_group(
     group_id: int,

@@ -180,6 +180,13 @@ class CreateGroupRequest(BaseModel):
         return v
 
 
+class GroupPreviewOut(BaseModel):
+    id: int
+    name: str
+    member_count: int
+    already_member: bool
+
+
 class JoinGroupRequest(BaseModel):
     invite_code: str
 

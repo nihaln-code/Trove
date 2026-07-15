@@ -76,9 +76,9 @@ export default function GroupDetail() {
     },
   })
 
-  function copyInviteCode() {
+  function copyInviteLink() {
     if (!group) return
-    navigator.clipboard.writeText(group.invite_code)
+    navigator.clipboard.writeText(`${window.location.origin}/join/${group.invite_code}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
@@ -119,12 +119,14 @@ export default function GroupDetail() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={copyInviteCode}
+            onClick={copyInviteLink}
             className="flex cursor-pointer items-center gap-2 rounded-lg border border-trove-border bg-trove-surface px-3 py-2 text-sm text-trove-text transition-colors hover:border-trove-accent"
-            title="Copy invite code"
+            title="Copy invite link"
           >
-            <span className="font-mono tracking-wider">{group.invite_code}</span>
-            <span className="text-xs text-trove-muted">{copied ? 'Copied!' : 'Copy'}</span>
+            <svg className="h-4 w-4 text-trove-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+            </svg>
+            <span className="text-sm">{copied ? 'Copied!' : 'Copy Invite Link'}</span>
           </button>
           {isOwner ? (
             <button

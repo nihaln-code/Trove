@@ -8,6 +8,7 @@ import Watchlist from './pages/Watchlist'
 import Recommendations from './pages/Recommendations'
 import Groups from './pages/Groups'
 import GroupDetail from './pages/GroupDetail'
+import JoinGroup from './pages/JoinGroup'
 import Profile from './pages/Profile'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/auth/ProtectedRoute'
@@ -35,6 +36,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/join/:inviteCode" element={<JoinGroup />} />
         <Route
           element={
             <ProtectedRoute>

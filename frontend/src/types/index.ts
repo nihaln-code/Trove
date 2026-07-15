@@ -102,6 +102,13 @@ export interface GroupDetail extends Group {
   members: GroupMember[]
 }
 
+export interface GroupPreview {
+  id: number
+  name: string
+  member_count: number
+  already_member: boolean
+}
+
 export interface GroupRecommendationItem {
   tmdb_id: number
   media_type: MediaType
