@@ -109,6 +109,17 @@ export default function Recommendations() {
     else updateWatchlist.mutate({ id: entry.id, status })
   }
 
+  function toggleLanguage(code: string) {
+    setItems([])
+    loadMorePage.current = 2
+    setLanguageIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }
+
   const loadMore = useCallback(async () => {
     if (isLoadingMore || isLoading) return
     setIsLoadingMore(true)
@@ -203,14 +214,7 @@ export default function Recommendations() {
               return (
                 <button
                   key={l.code}
-                  onClick={() =>
-                    setLanguageIds((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(l.code)) next.delete(l.code)
-                      else next.add(l.code)
-                      return next
-                    })
-                  }
+                  onClick={() => toggleLanguage(l.code)}
                   className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                     active
                       ? 'border-trove-accent bg-trove-accent text-white'

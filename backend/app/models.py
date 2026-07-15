@@ -129,14 +129,19 @@ class RecommendationReasonCache(Base):
     __table_args__ = (UniqueConstraint("user_id", "tmdb_id", "media_type"),)
 
 
-class GroupStreamingService(Base):
-    __tablename__ = "group_streaming_services"
+class GroupExcludedService(Base):
+    """A provider a member explicitly removed from the group's active list.
+
+    The group's active services are always the union of every member's
+    personal streaming services, minus whatever's excluded here — so newly
+    added personal services automatically flow into every group, and members
+    can opt specific ones back out rather than freezing the whole list.
+    """
+    __tablename__ = "group_excluded_services"
 
     id = Column(Integer, primary_key=True, index=True)
     group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
     tmdb_provider_id = Column(Integer, nullable=False)
-    provider_name = Column(String, nullable=False)
-    provider_logo_path = Column(String, nullable=True)
 
     __table_args__ = (UniqueConstraint("group_id", "tmdb_provider_id"),)
 

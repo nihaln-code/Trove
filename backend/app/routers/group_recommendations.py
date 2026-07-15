@@ -117,18 +117,20 @@ def _build_personal_group_profile(users: list[models.User]) -> dict:
 def _get_group_providers(
     group_id: int, users: list[models.User], db: Session
 ) -> tuple[set[int], dict[int, str]]:
-    """Returns (provider_id_set, provider_name_map) — custom services if set, else union of members'."""
-    custom = db.query(models.GroupStreamingService).filter_by(group_id=group_id).all()
-    if custom:
-        ids = {s.tmdb_provider_id for s in custom}
-        names = {s.tmdb_provider_id: s.provider_name for s in custom}
-        return ids, names
+    """Returns (provider_id_set, provider_name_map) — the union of all members'
+    personal services, minus any a member explicitly excluded for the group."""
     ids: set[int] = set()
     names: dict[int, str] = {}
     for u in users:
         for svc in u.streaming_services:
             ids.add(svc.tmdb_provider_id)
             names[svc.tmdb_provider_id] = svc.provider_name
+
+    excluded_ids = {
+        e.tmdb_provider_id for e in
+        db.query(models.GroupExcludedService).filter_by(group_id=group_id).all()
+    }
+    ids -= excluded_ids
     return ids, names
 
 

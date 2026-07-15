@@ -18,6 +18,8 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE group_watchlist_items ADD COLUMN IF NOT EXISTS metadata_json TEXT"))
     # Superseded by per-member ratings in group_item_ratings
     conn.execute(text("ALTER TABLE group_watchlist_items DROP COLUMN IF EXISTS rating"))
+    # Superseded by group_excluded_services (allow-list -> exclusion-list model)
+    conn.execute(text("DROP TABLE IF EXISTS group_streaming_services"))
     conn.commit()
 
 

@@ -264,7 +264,7 @@ def delete_group(
 
     # Not covered by Group's ORM cascades (members/items) — remove explicitly first
     db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).delete()
-    db.query(models.GroupStreamingService).filter_by(group_id=group_id).delete()
+    db.query(models.GroupExcludedService).filter_by(group_id=group_id).delete()
     db.delete(group)
     db.commit()
 
@@ -428,6 +428,19 @@ def _get_union_services(db: Session, group_id: int) -> list[schemas.GroupService
     return result
 
 
+def get_group_active_services(db: Session, group_id: int) -> tuple[list[schemas.GroupServiceItem], list[schemas.GroupServiceItem], bool]:
+    """Returns (active, available, is_custom). Active is always derived from the
+    live union of members' personal services minus any explicit exclusions —
+    so newly added personal services show up automatically."""
+    available = _get_union_services(db, group_id)
+    excluded_ids = {
+        e.tmdb_provider_id for e in
+        db.query(models.GroupExcludedService).filter_by(group_id=group_id).all()
+    }
+    active = [s for s in available if s.tmdb_provider_id not in excluded_ids]
+    return active, available, len(excluded_ids) > 0
+
+
 @router.get("/{group_id}/services", response_model=schemas.GroupServicesResponse)
 def get_group_services(
     group_id: int,
@@ -437,18 +450,8 @@ def get_group_services(
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
 
-    available = _get_union_services(db, group_id)
-    custom = db.query(models.GroupStreamingService).filter_by(group_id=group_id).all()
-
-    if custom:
-        active = [schemas.GroupServiceItem(
-            tmdb_provider_id=s.tmdb_provider_id,
-            provider_name=s.provider_name,
-            provider_logo_path=s.provider_logo_path,
-        ) for s in custom]
-        return schemas.GroupServicesResponse(active=active, available=available, is_custom=True)
-
-    return schemas.GroupServicesResponse(active=available, available=available, is_custom=False)
+    active, available, is_custom = get_group_active_services(db, group_id)
+    return schemas.GroupServicesResponse(active=active, available=available, is_custom=is_custom)
 
 
 @router.put("/{group_id}/services", response_model=schemas.GroupServicesResponse)
@@ -461,18 +464,17 @@ def set_group_services(
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
 
-    db.query(models.GroupStreamingService).filter_by(group_id=group_id).delete()
-    for svc in body.services:
-        db.add(models.GroupStreamingService(
-            group_id=group_id,
-            tmdb_provider_id=svc.tmdb_provider_id,
-            provider_name=svc.provider_name,
-            provider_logo_path=svc.provider_logo_path,
-        ))
+    available = _get_union_services(db, group_id)
+    selected_ids = {s.tmdb_provider_id for s in body.services}
+    excluded_ids = {s.tmdb_provider_id for s in available if s.tmdb_provider_id not in selected_ids}
+
+    db.query(models.GroupExcludedService).filter_by(group_id=group_id).delete()
+    for pid in excluded_ids:
+        db.add(models.GroupExcludedService(group_id=group_id, tmdb_provider_id=pid))
     db.commit()
 
-    available = _get_union_services(db, group_id)
-    return schemas.GroupServicesResponse(active=list(body.services), available=available, is_custom=True)
+    active, available, is_custom = get_group_active_services(db, group_id)
+    return schemas.GroupServicesResponse(active=active, available=available, is_custom=is_custom)
 
 
 @router.delete("/{group_id}/services", status_code=204)
@@ -483,5 +485,5 @@ def reset_group_services(
 ):
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
-    db.query(models.GroupStreamingService).filter_by(group_id=group_id).delete()
+    db.query(models.GroupExcludedService).filter_by(group_id=group_id).delete()
     db.commit()

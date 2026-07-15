@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GoogleLogin } from '@react-oauth/google'
 import { useAuthStore } from '../store/auth'
@@ -8,24 +8,45 @@ import api from '../services/api'
 export default function Landing() {
   const { user, setUser, isLoading } = useAuthStore()
   const navigate = useNavigate()
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isLoading && user) navigate('/browse')
   }, [user, isLoading, navigate])
 
+  async function completeSignIn() {
+    const me = await api.get('/users/me')
+    setUser(me.data)
+    navigate('/browse')
+  }
+
   async function handleGoogleSuccess(credentialResponse: { credential?: string }) {
     if (!credentialResponse.credential) return
+    setIsSigningIn(true)
+    setLoginError(null)
     try {
       const { data } = await api.post('/auth/google', {
         credential: credentialResponse.credential,
       })
       localStorage.setItem('access_token', data.access_token)
       localStorage.setItem('refresh_token', data.refresh_token)
-      const me = await api.get('/users/me')
-      setUser(me.data)
-      navigate('/browse')
+      await completeSignIn()
     } catch (err) {
       console.error('Login failed', err)
+      // The server may still be waking up from being idle. If we already got
+      // tokens, retry just the follow-up call instead of redoing Google auth.
+      if (localStorage.getItem('access_token')) {
+        try {
+          await completeSignIn()
+          return
+        } catch (retryErr) {
+          console.error('Retry after login failed', retryErr)
+        }
+      }
+      setLoginError('Sign-in is taking longer than expected — the server may be waking up. Please try again.')
+    } finally {
+      setIsSigningIn(false)
     }
   }
 
@@ -48,15 +69,25 @@ export default function Landing() {
           <p className="mb-6 text-center text-sm text-trove-muted">
             Track what you watch across all your services
           </p>
-          <div className="flex justify-center">
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={() => console.error('Google login error')}
-              theme="filled_black"
-              shape="rectangular"
-              size="large"
-              text="continue_with"
-            />
+          <div className="flex flex-col items-center gap-3">
+            {isSigningIn ? (
+              <div className="flex items-center gap-2 py-2 text-sm text-trove-muted">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
+                Signing in...
+              </div>
+            ) : (
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => setLoginError('Google sign-in failed. Please try again.')}
+                theme="filled_black"
+                shape="rectangular"
+                size="large"
+                text="continue_with"
+              />
+            )}
+            {loginError && (
+              <p className="text-center text-xs text-red-400">{loginError}</p>
+            )}
           </div>
         </div>
 
