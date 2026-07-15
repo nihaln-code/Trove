@@ -3,7 +3,7 @@ import random
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from openai import OpenAI
@@ -164,14 +164,14 @@ def _build_reason(candidate: dict, profile: dict, genre_map: dict) -> str:
     return "Trending on your services"
 
 
-def _run_generation(user: models.User, page: int = 1) -> list[dict]:
+def _run_generation(user: models.User, page: int = 1, languages: list[str] | None = None) -> list[dict]:
     profile = _build_taste_profile(user)
     genre_map = _get_genre_map()
     region_map = _build_provider_region_map(user)
     watchlist_ids = {(item.tmdb_id, item.media_type.value) for item in user.watchlist}
 
     if not profile["top_genres"]:
-        return _run_tmdb_fallback(user, page)
+        return _run_tmdb_fallback(user, page, languages=languages)
 
     def fetch_discover(args: tuple) -> list[dict]:
         genre_id, media_type, region, provider_ids, language = args
@@ -200,18 +200,22 @@ def _run_generation(user: models.User, page: int = 1) -> list[dict]:
         except Exception:
             return []
 
-    # Non-English dominant tastes get language-filtered queries so popularity
-    # ranking doesn't bury their content under English results.
-    top_languages = profile.get("top_languages", [])
-    non_english = [l for l in top_languages if l != "en"]
-    if non_english and "en" not in top_languages:
-        lang_passes: list[str | None] = non_english[:2]
-    elif non_english:
-        lang_passes = non_english[:1] + [None]
+    if languages:
+        # Explicit user filter overrides automatic language detection entirely
+        lang_passes: list[str | None] = list(languages)
+        genre_limit = 5
     else:
-        lang_passes = [None]
-
-    genre_limit = 5 if non_english else 3
+        # Non-English dominant tastes get language-filtered queries so popularity
+        # ranking doesn't bury their content under English results.
+        top_languages = profile.get("top_languages", [])
+        non_english = [l for l in top_languages if l != "en"]
+        if non_english and "en" not in top_languages:
+            lang_passes = non_english[:2]
+        elif non_english:
+            lang_passes = non_english[:1] + [None]
+        else:
+            lang_passes = [None]
+        genre_limit = 5 if non_english else 3
     tasks = [
         (gid, mt, region, pids, lang)
         for gid in profile["top_genres"][:genre_limit]
@@ -256,7 +260,7 @@ def _run_generation(user: models.User, page: int = 1) -> list[dict]:
     return results[:24]
 
 
-def _run_tmdb_fallback(user: models.User, page: int = 1) -> list[dict]:
+def _run_tmdb_fallback(user: models.User, page: int = 1, languages: list[str] | None = None) -> list[dict]:
     """Fallback for users whose watchlist items don't have metadata yet."""
     seeds: list = []
     for target_status, target_rating in [
@@ -280,10 +284,13 @@ def _run_tmdb_fallback(user: models.User, page: int = 1) -> list[dict]:
                 f"/{seed.media_type.value}/{seed.tmdb_id}/recommendations",
                 {"language": "en-US", "page": page},
             )
-            for r in data.get("results", []):
+            results = data.get("results", [])
+            if languages:
+                results = [r for r in results if r.get("original_language") in languages]
+            for r in results:
                 r["media_type"] = seed.media_type.value
                 r["_seed_title"] = seed.title
-            return data.get("results", [])
+            return results
         except Exception:
             return []
 
@@ -345,6 +352,7 @@ def _refresh_cache(user_id: int) -> None:
 @router.get("")
 def get_recommendations(
     page: int = 1,
+    languages: str = Query(None, description="Comma-separated ISO 639-1 codes to filter by"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
@@ -354,8 +362,16 @@ def get_recommendations(
     if not current_user.streaming_services:
         raise HTTPException(400, "Add streaming services first to get recommendations")
 
+    lang_list = [l.strip() for l in languages.split(",") if l.strip()] if languages else None
+
     if page > 1:
-        return _run_generation(current_user, page=page)
+        return _run_generation(current_user, page=page, languages=lang_list)
+
+    # A language filter always regenerates fresh and bypasses the shared cache,
+    # which represents the unfiltered default view.
+    if lang_list:
+        results = _run_generation(current_user, languages=lang_list)
+        return {"items": results, "generated_at": datetime.utcnow().isoformat()}
 
     cache = db.query(models.RecommendationCache).filter_by(user_id=current_user.id).first()
     if cache:
@@ -377,10 +393,16 @@ def get_recommendations(
 
 @router.post("/refresh")
 def refresh_recommendations(
+    languages: str = Query(None, description="Comma-separated ISO 639-1 codes to filter by"),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
-    results = _run_generation(current_user)
+    lang_list = [l.strip() for l in languages.split(",") if l.strip()] if languages else None
+    results = _run_generation(current_user, languages=lang_list)
+
+    if lang_list:
+        return {"items": results, "generated_at": datetime.utcnow().isoformat()}
+
     cache = db.query(models.RecommendationCache).filter_by(user_id=current_user.id).first()
     if cache is None:
         cache = models.RecommendationCache(user_id=current_user.id)

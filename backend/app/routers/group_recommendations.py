@@ -148,6 +148,7 @@ def _run_group_generation(
     db: Session,
     page: int = 1,
     mode: str = "group_watchlist",
+    languages: list[str] | None = None,
 ) -> list[dict]:
     memberships = db.query(models.GroupMembership).filter_by(group_id=group_id).all()
     users = [m.user for m in memberships]
@@ -183,19 +184,24 @@ def _run_group_generation(
     }
 
     # Determine language passes for Discover queries.
-    # Non-English dominant groups get language-filtered queries so popularity ranking
-    # doesn't bury their content under English results.
-    top_languages = profile.get("top_languages", [])
-    non_english = [l for l in top_languages if l != "en"]
-    if non_english and "en" not in top_languages:
-        # Pure non-English group — only query their language(s)
-        lang_passes: list[str | None] = non_english[:2]
-    elif non_english:
-        # Mixed — query the non-English language AND global (catches English)
-        lang_passes = non_english[:1] + [None]
+    if languages:
+        # Explicit user filter overrides automatic language detection entirely
+        lang_passes: list[str | None] = list(languages)
+        non_english = [l for l in languages if l != "en"]
     else:
-        # English or unknown — no language filter
-        lang_passes = [None]
+        # Non-English dominant groups get language-filtered queries so popularity ranking
+        # doesn't bury their content under English results.
+        top_languages = profile.get("top_languages", [])
+        non_english = [l for l in top_languages if l != "en"]
+        if non_english and "en" not in top_languages:
+            # Pure non-English group — only query their language(s)
+            lang_passes = non_english[:2]
+        elif non_english:
+            # Mixed — query the non-English language AND global (catches English)
+            lang_passes = non_english[:1] + [None]
+        else:
+            # English or unknown — no language filter
+            lang_passes = [None]
 
     # Fetch candidates from TMDB Discover
     def fetch_discover(args: tuple) -> list[dict]:
@@ -297,20 +303,23 @@ def get_group_recommendations(
     group_id: int,
     page: int = Query(1, ge=1),
     mode: str = Query("group_watchlist", pattern="^(group_watchlist|member_tastes)$"),
+    languages: str = Query(None, description="Comma-separated ISO 639-1 codes to filter by"),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
 
+    lang_list = [l.strip() for l in languages.split(",") if l.strip()] if languages else None
+
     based_on = None
     if page == 1:
         group_items = db.query(models.GroupWatchlistItem).filter_by(group_id=group_id).all()
         based_on = _get_based_on(group_items, mode)
 
-    # member_tastes mode is never cached — personal watchlists change often
-    if mode == "member_tastes":
-        results = _run_group_generation(group_id, current_user, db, page=page, mode=mode)
+    # member_tastes mode and an explicit language filter are never cached
+    if mode == "member_tastes" or lang_list:
+        results = _run_group_generation(group_id, current_user, db, page=page, mode=mode, languages=lang_list)
         if page > 1:
             return results
         return {"items": results, "generated_at": datetime.utcnow().isoformat(), "based_on": based_on}
@@ -344,18 +353,21 @@ def get_group_recommendations(
 def refresh_group_recommendations(
     group_id: int,
     mode: str = Query("group_watchlist", pattern="^(group_watchlist|member_tastes)$"),
+    languages: str = Query(None, description="Comma-separated ISO 639-1 codes to filter by"),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
 
+    lang_list = [l.strip() for l in languages.split(",") if l.strip()] if languages else None
+
     group_items = db.query(models.GroupWatchlistItem).filter_by(group_id=group_id).all()
     based_on = _get_based_on(group_items, mode)
 
-    results = _run_group_generation(group_id, current_user, db, mode=mode)
+    results = _run_group_generation(group_id, current_user, db, mode=mode, languages=lang_list)
 
-    if mode == "member_tastes":
+    if mode == "member_tastes" or lang_list:
         return {"items": results, "generated_at": datetime.utcnow().isoformat(), "based_on": based_on}
 
     cache = db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).first()

@@ -7,6 +7,8 @@ import type { GroupDetail as GroupDetailType, GroupWatchlistItem, GroupRecommend
 import { STATUS_BUTTONS } from '../types'
 import GroupContentSearchResult from '../components/groups/GroupContentSearchResult'
 import GroupRatingWidget from '../components/groups/GroupRatingWidget'
+import ScrollablePillRow from '../components/ui/ScrollablePillRow'
+import { LANGUAGES } from '../constants/languages'
 import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
 
 const STATUS_LABELS: Record<WatchlistStatus, string> = {
@@ -508,11 +510,13 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
   const [mode, setMode] = useState<RecommendationMode>('group_watchlist')
   const [items, setItems] = useState<GroupRecommendationItem[]>([])
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [languageIds, setLanguageIds] = useState<Set<string>>(new Set())
   const isLoadingMoreRef = useRef(false)
   const loadMorePage = useRef(2)
   const hasMore = useRef(true)
   const consecutiveEmpty = useRef(0)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const languagesKey = Array.from(languageIds).sort().join(',')
 
   function resetPagination() {
     loadMorePage.current = 2
@@ -526,8 +530,11 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
   })
 
   const { data, isLoading } = useQuery<{ items: GroupRecommendationItem[]; generated_at: string; based_on: 'shared_watchlist' | 'member_tastes' }>({
-    queryKey: ['group-recommendations', groupId, mode],
-    queryFn: () => api.get(`/groups/${groupId}/recommendations`, { params: { mode } }).then((r) => r.data),
+    queryKey: ['group-recommendations', groupId, mode, languagesKey],
+    queryFn: () =>
+      api
+        .get(`/groups/${groupId}/recommendations`, { params: { mode, languages: languagesKey || undefined } })
+        .then((r) => r.data),
     staleTime: Infinity,
   })
 
@@ -545,11 +552,24 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
     setMode(next)
   }
 
+  function toggleLanguage(code: string) {
+    setItems([])
+    resetPagination()
+    setLanguageIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }
+
   const refresh = useMutation({
     mutationFn: () =>
-      api.post(`/groups/${groupId}/recommendations/refresh`, null, { params: { mode } }).then((r) => r.data),
+      api
+        .post(`/groups/${groupId}/recommendations/refresh`, null, { params: { mode, languages: languagesKey || undefined } })
+        .then((r) => r.data),
     onSuccess: (data: { items: GroupRecommendationItem[]; generated_at: string; based_on: 'shared_watchlist' | 'member_tastes' }) => {
-      queryClient.setQueryData(['group-recommendations', groupId, mode], data)
+      queryClient.setQueryData(['group-recommendations', groupId, mode, languagesKey], data)
       setItems(data.items ?? [])
       resetPagination()
     },
@@ -588,7 +608,7 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
     setIsLoadingMore(true)
     try {
       const { data } = await api.get(`/groups/${groupId}/recommendations`, {
-        params: { page: loadMorePage.current, mode },
+        params: { page: loadMorePage.current, mode, languages: languagesKey || undefined },
       })
       const newItems: GroupRecommendationItem[] = Array.isArray(data) ? data : data.items ?? []
       if (newItems.length > 0) {
@@ -613,7 +633,7 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
       isLoadingMoreRef.current = false
       setIsLoadingMore(false)
     }
-  }, [isLoading, groupId, mode])
+  }, [isLoading, groupId, mode, languagesKey])
 
   useEffect(() => {
     const el = sentinelRef.current
@@ -666,6 +686,27 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
             Refresh
           </button>
         </div>
+      </div>
+
+      <div className="mb-4">
+        <ScrollablePillRow>
+          {LANGUAGES.map((l) => {
+            const active = languageIds.has(l.code)
+            return (
+              <button
+                key={l.code}
+                onClick={() => toggleLanguage(l.code)}
+                className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  active
+                    ? 'border-trove-accent bg-trove-accent text-white'
+                    : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
+                }`}
+              >
+                {l.name}
+              </button>
+            )
+          })}
+        </ScrollablePillRow>
       </div>
 
       {!isLoading && mode === 'group_watchlist' && data?.based_on === 'member_tastes' && (

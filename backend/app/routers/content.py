@@ -87,6 +87,7 @@ def list_all_providers(
 def browse(
     media_type: str = Query("movie", pattern="^(movie|tv)$"),
     genre_id: Optional[int] = Query(None),
+    languages: Optional[str] = Query(None, description="Comma-separated ISO 639-1 codes to filter by"),
     page: int = Query(1, ge=1),
     current_user: models.User = Depends(auth.get_current_user),
 ):
@@ -98,27 +99,48 @@ def browse(
         return {"results": [], "total_pages": 0, "total_results": 0}
 
     region_map = _build_provider_region_map(current_user)
+    lang_list: list[Optional[str]] = (
+        [l.strip() for l in languages.split(",") if l.strip()] if languages else [None]
+    )
+
+    def fetch(args: tuple) -> list[dict]:
+        region, provider_ids, language = args
+        try:
+            params: dict = {
+                "watch_region": region,
+                "with_watch_providers": "|".join(str(p) for p in provider_ids),
+                "page": page,
+                "language": "en-US",
+                "sort_by": "popularity.desc",
+            }
+            if genre_id:
+                params["with_genres"] = genre_id
+            if language:
+                params["with_original_language"] = language
+            data = tmdb_get(f"/discover/{media_type}", params)
+            results = []
+            for item in data.get("results", []):
+                item["media_type"] = media_type
+                results.append(item)
+            return results
+        except Exception:
+            return []
+
+    tasks = [
+        (region, provider_ids, language)
+        for region, provider_ids in region_map.items()
+        for language in lang_list
+    ]
 
     all_results = []
     seen_ids = set()
 
-    for region, provider_ids in region_map.items():
-        params = {
-            "watch_region": region,
-            "with_watch_providers": "|".join(str(p) for p in provider_ids),
-            "page": page,
-            "language": "en-US",
-            "sort_by": "popularity.desc",
-        }
-        if genre_id:
-            params["with_genres"] = genre_id
-
-        data = tmdb_get(f"/discover/{media_type}", params)
-        for item in data.get("results", []):
-            if item["id"] not in seen_ids:
-                seen_ids.add(item["id"])
-                item["media_type"] = media_type
-                all_results.append(item)
+    with ThreadPoolExecutor(max_workers=min(len(tasks), 20)) as pool:
+        for batch in pool.map(fetch, tasks):
+            for item in batch:
+                if item["id"] not in seen_ids:
+                    seen_ids.add(item["id"])
+                    all_results.append(item)
 
     all_results.sort(key=lambda x: x.get("popularity", 0), reverse=True)
     all_results = _attach_availability(all_results, current_user)

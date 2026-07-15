@@ -6,6 +6,8 @@ import type { RecommendationItem, WatchlistItem, WatchlistStatus } from '../type
 import { STATUS_BUTTONS } from '../types'
 import ContentModal from '../components/content/ContentModal'
 import RatingButtons from '../components/content/RatingButtons'
+import ScrollablePillRow from '../components/ui/ScrollablePillRow'
+import { LANGUAGES } from '../constants/languages'
 import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
 
 function timeAgo(iso: string): string {
@@ -25,8 +27,10 @@ export default function Recommendations() {
   const [selectedItem, setSelectedItem] = useState<RecommendationItem | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [languageIds, setLanguageIds] = useState<Set<string>>(new Set())
   const loadMorePage = useRef(2)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const languagesKey = Array.from(languageIds).sort().join(',')
 
   const { data: watchlist = [] } = useQuery<WatchlistItem[]>({
     queryKey: ['watchlist'],
@@ -40,8 +44,9 @@ export default function Recommendations() {
 
   // Auto-fetch on mount — cache makes this instant on repeat visits
   const { data: recsData, isLoading, error } = useQuery<{ items: RecommendationItem[]; generated_at: string }>({
-    queryKey: ['recommendations'],
-    queryFn: () => api.get('/recommendations').then((r) => r.data),
+    queryKey: ['recommendations', languagesKey],
+    queryFn: () =>
+      api.get('/recommendations', { params: { languages: languagesKey || undefined } }).then((r) => r.data),
     enabled: services.length > 0 && watchlist.length > 0,
     staleTime: Infinity,
   })
@@ -55,7 +60,8 @@ export default function Recommendations() {
   }, [recsData])
 
   const refreshMutation = useMutation({
-    mutationFn: () => api.post('/recommendations/refresh').then((r) => r.data),
+    mutationFn: () =>
+      api.post('/recommendations/refresh', null, { params: { languages: languagesKey || undefined } }).then((r) => r.data),
   })
 
   useEffect(() => {
@@ -65,7 +71,7 @@ export default function Recommendations() {
       setGeneratedAt(data.generated_at)
       setRefreshError(null)
       loadMorePage.current = 2
-      queryClient.setQueryData(['recommendations'], data)
+      queryClient.setQueryData(['recommendations', languagesKey], data)
     }
   }, [refreshMutation.data])
 
@@ -108,7 +114,7 @@ export default function Recommendations() {
     setIsLoadingMore(true)
     const page = loadMorePage.current
     try {
-      const { data } = await api.get('/recommendations', { params: { page } })
+      const { data } = await api.get('/recommendations', { params: { page, languages: languagesKey || undefined } })
       const newItems: RecommendationItem[] = Array.isArray(data) ? data : data.items ?? []
       if (newItems.length > 0) {
         setItems((prev) => {
@@ -122,7 +128,7 @@ export default function Recommendations() {
     } finally {
       setIsLoadingMore(false)
     }
-  }, [isLoadingMore, isLoading])
+  }, [isLoadingMore, isLoading, languagesKey])
 
   const onIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
@@ -188,6 +194,36 @@ export default function Recommendations() {
           </div>
         )}
       </div>
+
+      {!(noServices || emptyWatchlist) && (
+        <div className="mx-auto mb-6 w-full max-w-xl">
+          <ScrollablePillRow>
+            {LANGUAGES.map((l) => {
+              const active = languageIds.has(l.code)
+              return (
+                <button
+                  key={l.code}
+                  onClick={() =>
+                    setLanguageIds((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(l.code)) next.delete(l.code)
+                      else next.add(l.code)
+                      return next
+                    })
+                  }
+                  className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    active
+                      ? 'border-trove-accent bg-trove-accent text-white'
+                      : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
+                  }`}
+                >
+                  {l.name}
+                </button>
+              )
+            })}
+          </ScrollablePillRow>
+        </div>
+      )}
 
       {error && (
         <div className="mx-auto mb-6 max-w-lg rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-center text-sm text-red-400">

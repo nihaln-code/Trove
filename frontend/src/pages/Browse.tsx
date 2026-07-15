@@ -3,17 +3,20 @@ import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
 import ContentCard from '../components/content/ContentCard'
+import ScrollablePillRow from '../components/ui/ScrollablePillRow'
+import { LANGUAGES } from '../constants/languages'
 import type { TMDBContent, WatchlistItem } from '../types'
 import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
 
 export default function Browse() {
   const [mediaType, setMediaType] = useState<'movie' | 'tv'>('movie')
   const [genreId, setGenreId] = useState<number | null>(null)
+  const [languageIds, setLanguageIds] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const sentinelRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const genreScrollRef = useRef<HTMLDivElement>(null)
+  const languagesKey = Array.from(languageIds).sort().join(',')
 
   const { data: services } = useQuery({
     queryKey: ['streaming-services'],
@@ -33,10 +36,17 @@ export default function Browse() {
   const isSearching = search.length > 0
 
   const browseQuery = useInfiniteQuery({
-    queryKey: ['browse', mediaType, genreId],
+    queryKey: ['browse', mediaType, genreId, languagesKey],
     queryFn: ({ pageParam }) =>
       api
-        .get('/content/browse', { params: { media_type: mediaType, genre_id: genreId, page: pageParam } })
+        .get('/content/browse', {
+          params: {
+            media_type: mediaType,
+            genre_id: genreId,
+            languages: languagesKey || undefined,
+            page: pageParam,
+          },
+        })
         .then((r) => r.data),
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) =>
@@ -99,12 +109,6 @@ export default function Browse() {
   function clearSearch() {
     setSearch('')
     setSearchInput('')
-  }
-
-  function scrollGenres(direction: -1 | 1) {
-    const el = genreScrollRef.current
-    if (!el) return
-    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' })
   }
 
   if (!services?.length) {
@@ -203,53 +207,60 @@ export default function Browse() {
 
         {/* Row 2: genre pills */}
         {!isSearching && genres && genres.length > 0 && (
-          <div className="relative flex items-center">
+          <ScrollablePillRow>
             <button
-              onClick={() => scrollGenres(-1)}
-              aria-label="Scroll genres left"
-              className="absolute left-0 z-10 flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-full border border-trove-border bg-trove-surface text-trove-muted shadow-md transition-colors hover:border-trove-accent hover:text-trove-text"
+              onClick={() => setGenreId(null)}
+              className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                !genreId
+                  ? 'border-trove-accent bg-trove-accent text-white'
+                  : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
+              }`}
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-              </svg>
+              All
             </button>
-
-            <div ref={genreScrollRef} className="scrollbar-hide flex gap-2 overflow-x-auto px-9 pb-1">
+            {genres.map((g: { id: number; name: string }) => (
               <button
-                onClick={() => setGenreId(null)}
+                key={g.id}
+                onClick={() => setGenreId(g.id)}
                 className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                  !genreId
+                  genreId === g.id
                     ? 'border-trove-accent bg-trove-accent text-white'
                     : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
                 }`}
               >
-                All
+                {g.name}
               </button>
-              {genres.map((g: { id: number; name: string }) => (
+            ))}
+          </ScrollablePillRow>
+        )}
+
+        {/* Row 3: language filter pills (multi-select) */}
+        {!isSearching && (
+          <ScrollablePillRow>
+            {LANGUAGES.map((l) => {
+              const active = languageIds.has(l.code)
+              return (
                 <button
-                  key={g.id}
-                  onClick={() => setGenreId(g.id)}
+                  key={l.code}
+                  onClick={() =>
+                    setLanguageIds((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(l.code)) next.delete(l.code)
+                      else next.add(l.code)
+                      return next
+                    })
+                  }
                   className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                    genreId === g.id
+                    active
                       ? 'border-trove-accent bg-trove-accent text-white'
                       : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
                   }`}
                 >
-                  {g.name}
+                  {l.name}
                 </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => scrollGenres(1)}
-              aria-label="Scroll genres right"
-              className="absolute right-0 z-10 flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-full border border-trove-border bg-trove-surface text-trove-muted shadow-md transition-colors hover:border-trove-accent hover:text-trove-text"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </div>
+              )
+            })}
+          </ScrollablePillRow>
         )}
       </div>
 
