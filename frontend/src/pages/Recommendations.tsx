@@ -28,6 +28,7 @@ export default function Recommendations() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [languageIds, setLanguageIds] = useState<Set<string>>(new Set())
+  const [genreId, setGenreId] = useState<number | null>(null)
   const loadMorePage = useRef(2)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const languagesKey = Array.from(languageIds).sort().join(',')
@@ -42,11 +43,29 @@ export default function Recommendations() {
     queryFn: () => api.get('/streaming-services').then((r) => r.data),
   })
 
+  // Recommendations mix movies and TV, so merge both genre lists (dedupe by id)
+  const { data: genres = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['genres-merged'],
+    queryFn: async () => {
+      const [movies, tv] = await Promise.all([
+        api.get('/content/genres', { params: { media_type: 'movie' } }),
+        api.get('/content/genres', { params: { media_type: 'tv' } }),
+      ])
+      const merged = new Map<number, { id: number; name: string }>()
+      for (const g of [...movies.data, ...tv.data]) {
+        if (!merged.has(g.id)) merged.set(g.id, g)
+      }
+      return Array.from(merged.values())
+    },
+  })
+
   // Auto-fetch on mount — cache makes this instant on repeat visits
   const { data: recsData, isLoading, error } = useQuery<{ items: RecommendationItem[]; generated_at: string }>({
-    queryKey: ['recommendations', languagesKey],
+    queryKey: ['recommendations', languagesKey, genreId],
     queryFn: () =>
-      api.get('/recommendations', { params: { languages: languagesKey || undefined } }).then((r) => r.data),
+      api
+        .get('/recommendations', { params: { languages: languagesKey || undefined, genre_id: genreId ?? undefined } })
+        .then((r) => r.data),
     enabled: services.length > 0 && watchlist.length > 0,
     staleTime: Infinity,
   })
@@ -61,7 +80,9 @@ export default function Recommendations() {
 
   const refreshMutation = useMutation({
     mutationFn: () =>
-      api.post('/recommendations/refresh', null, { params: { languages: languagesKey || undefined } }).then((r) => r.data),
+      api
+        .post('/recommendations/refresh', null, { params: { languages: languagesKey || undefined, genre_id: genreId ?? undefined } })
+        .then((r) => r.data),
   })
 
   useEffect(() => {
@@ -71,7 +92,7 @@ export default function Recommendations() {
       setGeneratedAt(data.generated_at)
       setRefreshError(null)
       loadMorePage.current = 2
-      queryClient.setQueryData(['recommendations', languagesKey], data)
+      queryClient.setQueryData(['recommendations', languagesKey, genreId], data)
     }
   }, [refreshMutation.data])
 
@@ -120,12 +141,20 @@ export default function Recommendations() {
     })
   }
 
+  function selectGenre(id: number | null) {
+    setItems([])
+    loadMorePage.current = 2
+    setGenreId(id)
+  }
+
   const loadMore = useCallback(async () => {
     if (isLoadingMore || isLoading) return
     setIsLoadingMore(true)
     const page = loadMorePage.current
     try {
-      const { data } = await api.get('/recommendations', { params: { page, languages: languagesKey || undefined } })
+      const { data } = await api.get('/recommendations', {
+        params: { page, languages: languagesKey || undefined, genre_id: genreId ?? undefined },
+      })
       const newItems: RecommendationItem[] = Array.isArray(data) ? data : data.items ?? []
       if (newItems.length > 0) {
         setItems((prev) => {
@@ -139,7 +168,7 @@ export default function Recommendations() {
     } finally {
       setIsLoadingMore(false)
     }
-  }, [isLoadingMore, isLoading, languagesKey])
+  }, [isLoadingMore, isLoading, languagesKey, genreId])
 
   const onIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
@@ -225,6 +254,36 @@ export default function Recommendations() {
                 </button>
               )
             })}
+          </ScrollablePillRow>
+        </div>
+      )}
+
+      {!(noServices || emptyWatchlist) && genres.length > 0 && (
+        <div className="mx-auto mb-6 w-full max-w-xl">
+          <ScrollablePillRow>
+            <button
+              onClick={() => selectGenre(null)}
+              className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                !genreId
+                  ? 'border-trove-accent bg-trove-accent text-white'
+                  : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
+              }`}
+            >
+              All
+            </button>
+            {genres.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => selectGenre(g.id)}
+                className={`flex-shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  genreId === g.id
+                    ? 'border-trove-accent bg-trove-accent text-white'
+                    : 'border-trove-border bg-trove-surface text-trove-muted hover:border-trove-accent/50 hover:text-trove-text'
+                }`}
+              >
+                {g.name}
+              </button>
+            ))}
           </ScrollablePillRow>
         </div>
       )}

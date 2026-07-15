@@ -164,14 +164,20 @@ def _build_reason(candidate: dict, profile: dict, genre_map: dict) -> str:
     return "Trending on your services"
 
 
-def _run_generation(user: models.User, page: int = 1, languages: list[str] | None = None) -> list[dict]:
+def _run_generation(
+    user: models.User,
+    page: int = 1,
+    languages: list[str] | None = None,
+    genre_filter: int | None = None,
+) -> list[dict]:
     profile = _build_taste_profile(user)
     genre_map = _get_genre_map()
     region_map = _build_provider_region_map(user)
     watchlist_ids = {(item.tmdb_id, item.media_type.value) for item in user.watchlist}
 
-    if not profile["top_genres"]:
-        return _run_tmdb_fallback(user, page, languages=languages)
+    top_genres = [genre_filter] if genre_filter else profile["top_genres"]
+    if not top_genres:
+        return _run_tmdb_fallback(user, page, languages=languages, genre_filter=genre_filter)
 
     def fetch_discover(args: tuple) -> list[dict]:
         genre_id, media_type, region, provider_ids, language = args
@@ -189,7 +195,9 @@ def _run_generation(user: models.User, page: int = 1, languages: list[str] | Non
             }
             if language:
                 params["with_original_language"] = language
-            if profile["avoided_genres"]:
+            # Skip the auto-detected avoided-genres exclusion when the user explicitly
+            # asked for a specific genre — their choice should win over that signal.
+            if profile["avoided_genres"] and not genre_filter:
                 params["without_genres"] = ",".join(str(g) for g in profile["avoided_genres"])
             data = tmdb_get(f"/discover/{media_type}", params)
             results = []
@@ -203,7 +211,7 @@ def _run_generation(user: models.User, page: int = 1, languages: list[str] | Non
     if languages:
         # Explicit user filter overrides automatic language detection entirely
         lang_passes: list[str | None] = list(languages)
-        genre_limit = 5
+        non_english = [l for l in languages if l != "en"]
     else:
         # Non-English dominant tastes get language-filtered queries so popularity
         # ranking doesn't bury their content under English results.
@@ -215,10 +223,11 @@ def _run_generation(user: models.User, page: int = 1, languages: list[str] | Non
             lang_passes = non_english[:1] + [None]
         else:
             lang_passes = [None]
-        genre_limit = 5 if non_english else 3
+
+    genre_slice = top_genres if genre_filter else top_genres[:(5 if non_english else 3)]
     tasks = [
         (gid, mt, region, pids, lang)
-        for gid in profile["top_genres"][:genre_limit]
+        for gid in genre_slice
         for mt in ("movie", "tv")
         for region, pids in region_map.items()
         for lang in lang_passes
@@ -260,7 +269,12 @@ def _run_generation(user: models.User, page: int = 1, languages: list[str] | Non
     return results[:24]
 
 
-def _run_tmdb_fallback(user: models.User, page: int = 1, languages: list[str] | None = None) -> list[dict]:
+def _run_tmdb_fallback(
+    user: models.User,
+    page: int = 1,
+    languages: list[str] | None = None,
+    genre_filter: int | None = None,
+) -> list[dict]:
     """Fallback for users whose watchlist items don't have metadata yet."""
     seeds: list = []
     for target_status, target_rating in [
@@ -287,6 +301,8 @@ def _run_tmdb_fallback(user: models.User, page: int = 1, languages: list[str] | 
             results = data.get("results", [])
             if languages:
                 results = [r for r in results if r.get("original_language") in languages]
+            if genre_filter:
+                results = [r for r in results if genre_filter in (r.get("genre_ids") or [])]
             for r in results:
                 r["media_type"] = seed.media_type.value
                 r["_seed_title"] = seed.title
@@ -353,6 +369,7 @@ def _refresh_cache(user_id: int) -> None:
 def get_recommendations(
     page: int = 1,
     languages: str = Query(None, description="Comma-separated ISO 639-1 codes to filter by"),
+    genre_id: int = Query(None, description="TMDB genre ID to filter by"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
@@ -365,12 +382,12 @@ def get_recommendations(
     lang_list = [l.strip() for l in languages.split(",") if l.strip()] if languages else None
 
     if page > 1:
-        return _run_generation(current_user, page=page, languages=lang_list)
+        return _run_generation(current_user, page=page, languages=lang_list, genre_filter=genre_id)
 
-    # A language filter always regenerates fresh and bypasses the shared cache,
-    # which represents the unfiltered default view.
-    if lang_list:
-        results = _run_generation(current_user, languages=lang_list)
+    # A language or genre filter always regenerates fresh and bypasses the
+    # shared cache, which represents the unfiltered default view.
+    if lang_list or genre_id:
+        results = _run_generation(current_user, languages=lang_list, genre_filter=genre_id)
         return {"items": results, "generated_at": datetime.utcnow().isoformat()}
 
     cache = db.query(models.RecommendationCache).filter_by(user_id=current_user.id).first()
@@ -394,13 +411,14 @@ def get_recommendations(
 @router.post("/refresh")
 def refresh_recommendations(
     languages: str = Query(None, description="Comma-separated ISO 639-1 codes to filter by"),
+    genre_id: int = Query(None, description="TMDB genre ID to filter by"),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
     lang_list = [l.strip() for l in languages.split(",") if l.strip()] if languages else None
-    results = _run_generation(current_user, languages=lang_list)
+    results = _run_generation(current_user, languages=lang_list, genre_filter=genre_id)
 
-    if lang_list:
+    if lang_list or genre_id:
         return {"items": results, "generated_at": datetime.utcnow().isoformat()}
 
     cache = db.query(models.RecommendationCache).filter_by(user_id=current_user.id).first()
