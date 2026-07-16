@@ -46,6 +46,8 @@ export interface TMDBContent {
   media_type: MediaType
   genre_ids?: number[]
   available_on?: string[]
+  has_any_streaming?: boolean
+  in_theatres?: boolean
 }
 
 export interface TMDBProvider {

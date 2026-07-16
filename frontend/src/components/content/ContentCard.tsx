@@ -88,7 +88,7 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
           <span className="rounded bg-trove-border px-1 capitalize">{item.media_type}</span>
         </div>
 
-        {item.available_on && item.available_on.length > 0 && (
+        {item.available_on && item.available_on.length > 0 ? (
           <div className="mb-3 flex flex-wrap gap-1">
             {item.available_on.map((svc) => (
               <span key={svc} className="rounded bg-trove-accent/20 px-1.5 py-0.5 text-xs text-trove-accent">
@@ -96,6 +96,14 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
               </span>
             ))}
           </div>
+        ) : (
+          <p className="mb-3 text-xs text-amber-400">
+            {item.in_theatres
+              ? 'In theatres'
+              : item.has_any_streaming
+                ? 'Not on your services'
+                : 'Not currently streaming'}
+          </p>
         )}
 
         <div className="mt-auto flex flex-col gap-1.5">

@@ -32,21 +32,35 @@ def _build_provider_region_map(user: models.User) -> dict[str, list[int]]:
     return region_map
 
 
-def _get_availability(tmdb_id: int, media_type: str, user: models.User) -> list[str]:
+def _get_item_availability(tmdb_id: int, media_type: str, user: models.User) -> dict:
+    """Returns {available_on, has_any_streaming, in_theatres} for a title —
+    available_on is scoped to the user's own services, while has_any_streaming
+    and in_theatres explain WHY it's empty when it is."""
     user_provider_ids = {svc.tmdb_provider_id: svc.provider_name for svc in user.streaming_services}
+    result = {"available_on": [], "has_any_streaming": False, "in_theatres": False}
     if not user_provider_ids:
-        return []
+        return result
+
     try:
         data = tmdb_get(f"/{media_type}/{tmdb_id}/watch/providers")
     except Exception:
-        return []
+        return result
+
     user_regions = {svc.region_override or user.default_region for svc in user.streaming_services}
     available_on = set()
+    for region_data in data.get("results", {}).values():
+        if region_data.get("flatrate"):
+            result["has_any_streaming"] = True
     for region in user_regions:
         for p in data.get("results", {}).get(region, {}).get("flatrate", []):
             if p["provider_id"] in user_provider_ids:
                 available_on.add(user_provider_ids[p["provider_id"]])
-    return list(available_on)
+    result["available_on"] = list(available_on)
+
+    if media_type == "movie" and not result["has_any_streaming"]:
+        result["in_theatres"] = _is_in_theatres_only(tmdb_id)
+
+    return result
 
 
 def _attach_availability(items: list[dict], user: models.User) -> list[dict]:
@@ -54,7 +68,10 @@ def _attach_availability(items: list[dict], user: models.User) -> list[dict]:
         return items
 
     def attach(item: dict) -> dict:
-        item["available_on"] = _get_availability(item["id"], item["media_type"], user)
+        info = _get_item_availability(item["id"], item["media_type"], user)
+        item["available_on"] = info["available_on"]
+        item["has_any_streaming"] = info["has_any_streaming"]
+        item["in_theatres"] = info["in_theatres"]
         return item
 
     with ThreadPoolExecutor(max_workers=min(len(items), 20)) as pool:
