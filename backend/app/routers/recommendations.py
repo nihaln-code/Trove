@@ -196,7 +196,7 @@ def _run_generation(
             if language:
                 params["with_original_language"] = language
             # Skip the auto-detected avoided-genres exclusion when the user explicitly
-            # asked for a specific genre — their choice should win over that signal.
+            # asked for a specific genre, their choice should win over that signal.
             if profile["avoided_genres"] and not genre_filter:
                 params["without_genres"] = ",".join(str(g) for g in profile["avoided_genres"])
             data = tmdb_get(f"/discover/{media_type}", params)

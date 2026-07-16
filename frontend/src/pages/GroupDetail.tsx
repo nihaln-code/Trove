@@ -397,7 +397,7 @@ function GroupServicesSection({ groupId }: { groupId: number }) {
       {!isEditing ? (
         data.active.length === 0 ? (
           <p className="text-sm text-trove-muted">
-            No streaming services — add services in your profile or edit here to set group services.
+            No streaming services. Add services in your profile or edit here to set group services.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -623,7 +623,7 @@ function GroupRecommendations({ groupId }: { groupId: number }) {
         if (consecutiveEmpty.current >= 3) {
           hasMore.current = false
         } else {
-          // This TMDB page had no available results — skip it and try the next
+          // This TMDB page had no available results, skip it and try the next
           loadMorePage.current += 1
         }
       }

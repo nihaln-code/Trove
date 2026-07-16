@@ -134,7 +134,7 @@ class GroupExcludedService(Base):
 
     The group's active services are always the union of every member's
     personal streaming services (plus anything in GroupAddedService), minus
-    whatever's excluded here — so newly added personal services automatically
+    whatever's excluded here, so newly added personal services automatically
     flow into every group, and members can opt specific ones back out rather
     than freezing the whole list.
     """
@@ -149,7 +149,7 @@ class GroupExcludedService(Base):
 
 class GroupAddedService(Base):
     """A provider a member explicitly added to the group that isn't part of
-    any member's personal streaming services — lets a group opt in to a
+    any member's personal streaming services, lets a group opt in to a
     service none of its members personally use, without touching anyone's
     personal service list.
     """

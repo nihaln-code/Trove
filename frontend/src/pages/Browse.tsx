@@ -112,7 +112,7 @@ export default function Browse() {
     setSearchInput('')
   }
 
-  // Clicking the Trove logo re-navigates to /browse even when already here —
+  // Clicking the Trove logo re-navigates to /browse even when already here,
   // treat that as "start over" and drop any active search.
   useEffect(() => {
     clearSearch()

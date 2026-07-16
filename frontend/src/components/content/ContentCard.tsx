@@ -101,7 +101,7 @@ export default function ContentCard({ item, watchlistItems = [] }: Props) {
             {item.in_theatres
               ? 'In theatres'
               : item.other_providers && item.other_providers.length > 0
-                ? `Not on your services — on ${item.other_providers.join(', ')}`
+                ? `Not on your services, on ${item.other_providers.join(', ')}`
                 : item.has_any_streaming
                   ? 'Not on your services'
                   : 'Not currently streaming'}

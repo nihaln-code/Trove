@@ -59,7 +59,7 @@ export default function Recommendations() {
     },
   })
 
-  // Auto-fetch on mount — cache makes this instant on repeat visits
+  // Auto-fetch on mount, cache makes this instant on repeat visits
   const { data: recsData, isLoading, error } = useQuery<{ items: RecommendationItem[]; generated_at: string }>({
     queryKey: ['recommendations', languagesKey, genreId],
     queryFn: () =>

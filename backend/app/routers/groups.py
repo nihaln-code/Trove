@@ -262,7 +262,7 @@ def delete_group(
     if group.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can delete the group")
 
-    # Not covered by Group's ORM cascades (members/items) — remove explicitly first
+    # Not covered by Group's ORM cascades (members/items), remove explicitly first
     db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).delete()
     db.query(models.GroupExcludedService).filter_by(group_id=group_id).delete()
     db.query(models.GroupAddedService).filter_by(group_id=group_id).delete()
@@ -432,7 +432,7 @@ def _get_union_services(db: Session, group_id: int) -> list[schemas.GroupService
 def get_group_active_services(db: Session, group_id: int) -> tuple[list[schemas.GroupServiceItem], list[schemas.GroupServiceItem], bool]:
     """Returns (active, available, is_custom). Active is the live union of
     members' personal services plus any group-added extras, minus any
-    explicit exclusions — so newly added personal services show up
+    explicit exclusions, so newly added personal services show up
     automatically, and members can both add services no one personally has
     and remove ones they don't want counted."""
     base = _get_union_services(db, group_id)

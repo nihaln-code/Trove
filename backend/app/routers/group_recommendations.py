@@ -117,7 +117,7 @@ def _build_personal_group_profile(users: list[models.User]) -> dict:
 def _get_group_providers(
     group_id: int, users: list[models.User], db: Session
 ) -> tuple[set[int], dict[int, str]]:
-    """Returns (provider_id_set, provider_name_map) — the union of all members'
+    """Returns (provider_id_set, provider_name_map): the union of all members'
     personal services plus any group-added extras, minus anything a member
     explicitly excluded for the group."""
     ids: set[int] = set()
@@ -184,7 +184,7 @@ def _run_group_generation(
 
     region = requesting_user.default_region
 
-    # Items already in the group's shared watchlist — exclude from recs
+    # Items already in the group's shared watchlist, exclude from recs
     group_watchlist_keys = {
         (item.tmdb_id, item.media_type.value)
         for item in group_items
@@ -201,13 +201,13 @@ def _run_group_generation(
         top_languages = profile.get("top_languages", [])
         non_english = [l for l in top_languages if l != "en"]
         if non_english and "en" not in top_languages:
-            # Pure non-English group — only query their language(s)
+            # Pure non-English group, only query their language(s)
             lang_passes = non_english[:2]
         elif non_english:
-            # Mixed — query the non-English language AND global (catches English)
+            # Mixed: query the non-English language AND global (catches English)
             lang_passes = non_english[:1] + [None]
         else:
-            # English or unknown — no language filter
+            # English or unknown, no language filter
             lang_passes = [None]
 
     # Fetch candidates from TMDB Discover
@@ -297,7 +297,7 @@ def _run_group_generation(
 # ---------------------------------------------------------------------------
 
 def _get_based_on(group_items: list[models.GroupWatchlistItem], mode: str) -> str:
-    """Which data source recommendations actually came from — can differ from the
+    """Which data source recommendations actually came from, can differ from the
     requested mode when group_watchlist falls back to member tastes (too few
     enriched shared-watchlist items)."""
     if mode == "member_tastes":

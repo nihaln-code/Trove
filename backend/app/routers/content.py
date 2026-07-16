@@ -34,7 +34,7 @@ def _build_provider_region_map(user: models.User) -> dict[str, list[int]]:
 
 def _get_item_availability(tmdb_id: int, media_type: str, user: models.User) -> dict:
     """Returns {available_on, has_any_streaming, in_theatres, other_providers}
-    for a title — available_on is scoped to the user's own services, while
+    for a title. available_on is scoped to the user's own services, while
     has_any_streaming/in_theatres/other_providers explain WHY it's empty when
     it is. other_providers is scoped to the user's own regions, since a
     service licensed only in another region isn't actually reachable."""
