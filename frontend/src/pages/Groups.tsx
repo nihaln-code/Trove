@@ -10,9 +10,7 @@ export default function Groups() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const [showCreate, setShowCreate] = useState(false)
-  const [showJoin, setShowJoin] = useState(false)
   const [name, setName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
 
   const { data: groups = [], isLoading } = useQuery<Group[]>({
     queryKey: ['groups'],
@@ -27,22 +25,9 @@ export default function Groups() {
     },
   })
 
-  const joinGroup = useMutation({
-    mutationFn: (invite_code: string) => api.post('/groups/join', { invite_code }).then((r) => r.data),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['groups'] })
-      navigate(`/groups/${data.id}`)
-    },
-  })
-
   function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (name.trim()) createGroup.mutate(name.trim())
-  }
-
-  function handleJoin(e: React.FormEvent) {
-    e.preventDefault()
-    if (inviteCode.trim()) joinGroup.mutate(inviteCode.trim())
   }
 
   if (isLoading) {
@@ -62,13 +47,7 @@ export default function Groups() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowJoin((v) => !v); setShowCreate(false) }}
-            className="cursor-pointer rounded-lg border border-trove-border bg-trove-surface px-4 py-2 text-sm font-medium text-trove-text transition-colors hover:border-trove-accent"
-          >
-            Join with Code
-          </button>
-          <button
-            onClick={() => { setShowCreate((v) => !v); setShowJoin(false) }}
+            onClick={() => setShowCreate((v) => !v)}
             className="cursor-pointer rounded-lg bg-trove-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-trove-accent-hover"
           >
             + Create Group
@@ -101,33 +80,6 @@ export default function Groups() {
         </form>
       )}
 
-      {showJoin && (
-        <form onSubmit={handleJoin} className="mb-6 rounded-xl border border-trove-border bg-trove-card p-4">
-          <label className="mb-1.5 block text-sm font-medium text-trove-text">Invite code</label>
-          <div className="flex gap-2">
-            <input
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-              placeholder="e.g. AB12CD34"
-              autoFocus
-              className="flex-1 rounded-lg border border-trove-border bg-trove-surface px-3 py-2 text-sm uppercase tracking-wider text-trove-text placeholder-trove-muted outline-none focus:border-trove-accent"
-            />
-            <button
-              type="submit"
-              disabled={joinGroup.isPending || !inviteCode.trim()}
-              className="cursor-pointer rounded-lg bg-trove-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-trove-accent-hover disabled:opacity-50"
-            >
-              Join
-            </button>
-          </div>
-          {joinGroup.isError && (
-            <p className="mt-2 text-xs text-red-400">
-              {(joinGroup.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Could not join group.'}
-            </p>
-          )}
-        </form>
-      )}
-
       {groups.length === 0 ? (
         <div className="py-20 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-trove-surface text-trove-muted">
@@ -135,7 +87,7 @@ export default function Groups() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
             </svg>
           </div>
-          <p className="text-trove-muted">No groups yet. Create one or join with an invite code.</p>
+          <p className="text-trove-muted">No groups yet. Create one, or ask someone to send you an invite link.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

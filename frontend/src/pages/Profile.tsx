@@ -112,7 +112,7 @@ export default function Profile() {
       <section className="mb-8 rounded-xl border border-trove-border bg-trove-card p-6">
         <h2 className="mb-1 text-lg font-semibold text-trove-text">Default Region</h2>
         <p className="mb-4 text-sm text-trove-muted">
-          Used to determine streaming availability when no per-service override is set.
+          Default region that will be applied to streaming services unless a different region is selected
         </p>
         <div className="flex items-center gap-3">
           <select

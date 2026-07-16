@@ -188,7 +188,7 @@ export default function ContentModal({ tmdbId, mediaType, onClose }: Props) {
                 </div>
               )}
 
-              {availableProviders.length > 0 && (
+              {availableProviders.length > 0 ? (
                 <div className="mb-5">
                   <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-trove-muted">
                     Available on
@@ -204,6 +204,14 @@ export default function ContentModal({ tmdbId, mediaType, onClose }: Props) {
                     ))}
                   </div>
                 </div>
+              ) : (
+                <p className="mb-5 text-xs text-amber-400">
+                  {detail.in_theatres
+                    ? 'Currently in theatres — not yet available to stream.'
+                    : detail.has_any_streaming
+                      ? "Not available on any of your streaming services."
+                      : 'Not currently available to stream anywhere we track.'}
+                </p>
               )}
 
               <div className="flex gap-2">

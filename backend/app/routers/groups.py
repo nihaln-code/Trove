@@ -265,6 +265,7 @@ def delete_group(
     # Not covered by Group's ORM cascades (members/items) — remove explicitly first
     db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).delete()
     db.query(models.GroupExcludedService).filter_by(group_id=group_id).delete()
+    db.query(models.GroupAddedService).filter_by(group_id=group_id).delete()
     db.delete(group)
     db.commit()
 
@@ -429,16 +430,30 @@ def _get_union_services(db: Session, group_id: int) -> list[schemas.GroupService
 
 
 def get_group_active_services(db: Session, group_id: int) -> tuple[list[schemas.GroupServiceItem], list[schemas.GroupServiceItem], bool]:
-    """Returns (active, available, is_custom). Active is always derived from the
-    live union of members' personal services minus any explicit exclusions —
-    so newly added personal services show up automatically."""
-    available = _get_union_services(db, group_id)
+    """Returns (active, available, is_custom). Active is the live union of
+    members' personal services plus any group-added extras, minus any
+    explicit exclusions — so newly added personal services show up
+    automatically, and members can both add services no one personally has
+    and remove ones they don't want counted."""
+    base = _get_union_services(db, group_id)
+    added_rows = db.query(models.GroupAddedService).filter_by(group_id=group_id).all()
     excluded_ids = {
         e.tmdb_provider_id for e in
         db.query(models.GroupExcludedService).filter_by(group_id=group_id).all()
     }
+
+    combined: dict[int, schemas.GroupServiceItem] = {s.tmdb_provider_id: s for s in base}
+    for a in added_rows:
+        combined[a.tmdb_provider_id] = schemas.GroupServiceItem(
+            tmdb_provider_id=a.tmdb_provider_id,
+            provider_name=a.provider_name,
+            provider_logo_path=a.provider_logo_path,
+        )
+
+    available = list(combined.values())
     active = [s for s in available if s.tmdb_provider_id not in excluded_ids]
-    return active, available, len(excluded_ids) > 0
+    is_custom = len(excluded_ids) > 0 or len(added_rows) > 0
+    return active, available, is_custom
 
 
 @router.get("/{group_id}/services", response_model=schemas.GroupServicesResponse)
@@ -464,13 +479,27 @@ def set_group_services(
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
 
-    available = _get_union_services(db, group_id)
-    selected_ids = {s.tmdb_provider_id for s in body.services}
-    excluded_ids = {s.tmdb_provider_id for s in available if s.tmdb_provider_id not in selected_ids}
+    base_ids = {s.tmdb_provider_id for s in _get_union_services(db, group_id)}
+    selected = {s.tmdb_provider_id: s for s in body.services}
+    selected_ids = set(selected.keys())
+
+    excluded_ids = base_ids - selected_ids
+    added_ids = selected_ids - base_ids
 
     db.query(models.GroupExcludedService).filter_by(group_id=group_id).delete()
     for pid in excluded_ids:
         db.add(models.GroupExcludedService(group_id=group_id, tmdb_provider_id=pid))
+
+    db.query(models.GroupAddedService).filter_by(group_id=group_id).delete()
+    for pid in added_ids:
+        svc = selected[pid]
+        db.add(models.GroupAddedService(
+            group_id=group_id,
+            tmdb_provider_id=pid,
+            provider_name=svc.provider_name,
+            provider_logo_path=svc.provider_logo_path,
+        ))
+
     db.commit()
 
     active, available, is_custom = get_group_active_services(db, group_id)
@@ -486,4 +515,5 @@ def reset_group_services(
     _get_group_or_404(db, group_id)
     _get_membership_or_403(db, group_id, current_user.id)
     db.query(models.GroupExcludedService).filter_by(group_id=group_id).delete()
+    db.query(models.GroupAddedService).filter_by(group_id=group_id).delete()
     db.commit()

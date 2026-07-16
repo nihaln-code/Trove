@@ -133,15 +133,33 @@ class GroupExcludedService(Base):
     """A provider a member explicitly removed from the group's active list.
 
     The group's active services are always the union of every member's
-    personal streaming services, minus whatever's excluded here — so newly
-    added personal services automatically flow into every group, and members
-    can opt specific ones back out rather than freezing the whole list.
+    personal streaming services (plus anything in GroupAddedService), minus
+    whatever's excluded here — so newly added personal services automatically
+    flow into every group, and members can opt specific ones back out rather
+    than freezing the whole list.
     """
     __tablename__ = "group_excluded_services"
 
     id = Column(Integer, primary_key=True, index=True)
     group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
     tmdb_provider_id = Column(Integer, nullable=False)
+
+    __table_args__ = (UniqueConstraint("group_id", "tmdb_provider_id"),)
+
+
+class GroupAddedService(Base):
+    """A provider a member explicitly added to the group that isn't part of
+    any member's personal streaming services — lets a group opt in to a
+    service none of its members personally use, without touching anyone's
+    personal service list.
+    """
+    __tablename__ = "group_added_services"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    tmdb_provider_id = Column(Integer, nullable=False)
+    provider_name = Column(String, nullable=False)
+    provider_logo_path = Column(String, nullable=True)
 
     __table_args__ = (UniqueConstraint("group_id", "tmdb_provider_id"),)
 

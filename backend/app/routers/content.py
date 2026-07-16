@@ -1,6 +1,7 @@
 import re
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -185,6 +186,37 @@ def get_genres(
     return data.get("genres", [])
 
 
+def _is_in_theatres_only(tmdb_id: int) -> bool:
+    """True if the movie has had a theatrical release but no digital/physical
+    release yet, per TMDB's typed release-date data (2/3 = theatrical,
+    4/5 = digital/physical)."""
+    try:
+        data = tmdb_get(f"/movie/{tmdb_id}/release_dates")
+    except Exception:
+        return False
+
+    now = datetime.utcnow()
+    has_theatrical = False
+    has_digital = False
+    for entry in data.get("results", []):
+        for rd in entry.get("release_dates", []):
+            raw_date = rd.get("release_date")
+            if not raw_date:
+                continue
+            try:
+                rd_date = datetime.strptime(raw_date[:10], "%Y-%m-%d")
+            except ValueError:
+                continue
+            if rd_date > now:
+                continue
+            if rd.get("type") in (2, 3):
+                has_theatrical = True
+            elif rd.get("type") in (4, 5):
+                has_digital = True
+
+    return has_theatrical and not has_digital
+
+
 @router.get("/{media_type}/{tmdb_id}")
 def get_detail(
     media_type: str,
@@ -203,13 +235,18 @@ def get_detail(
 
     providers_data = tmdb_get(f"/{media_type}/{tmdb_id}/watch/providers")
     availability = {}
+    has_any_streaming = False
     for region, providers_by_type in providers_data.get("results", {}).items():
         flatrate = providers_by_type.get("flatrate", [])
+        if flatrate:
+            has_any_streaming = True
         matched = [p for p in flatrate if p["provider_id"] in user_provider_ids]
         if matched:
             availability[region] = matched
 
     detail["user_availability"] = availability
+    detail["has_any_streaming"] = has_any_streaming
+    detail["in_theatres"] = media_type == "movie" and not has_any_streaming and _is_in_theatres_only(tmdb_id)
     return detail
 
 
