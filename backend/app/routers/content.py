@@ -33,11 +33,13 @@ def _build_provider_region_map(user: models.User) -> dict[str, list[int]]:
 
 
 def _get_item_availability(tmdb_id: int, media_type: str, user: models.User) -> dict:
-    """Returns {available_on, has_any_streaming, in_theatres} for a title —
-    available_on is scoped to the user's own services, while has_any_streaming
-    and in_theatres explain WHY it's empty when it is."""
+    """Returns {available_on, has_any_streaming, in_theatres, other_providers}
+    for a title — available_on is scoped to the user's own services, while
+    has_any_streaming/in_theatres/other_providers explain WHY it's empty when
+    it is. other_providers is scoped to the user's own regions, since a
+    service licensed only in another region isn't actually reachable."""
     user_provider_ids = {svc.tmdb_provider_id: svc.provider_name for svc in user.streaming_services}
-    result = {"available_on": [], "has_any_streaming": False, "in_theatres": False}
+    result = {"available_on": [], "has_any_streaming": False, "in_theatres": False, "other_providers": []}
     if not user_provider_ids:
         return result
 
@@ -48,6 +50,7 @@ def _get_item_availability(tmdb_id: int, media_type: str, user: models.User) -> 
 
     user_regions = {svc.region_override or user.default_region for svc in user.streaming_services}
     available_on = set()
+    other_providers = set()
     for region_data in data.get("results", {}).values():
         if region_data.get("flatrate"):
             result["has_any_streaming"] = True
@@ -55,7 +58,10 @@ def _get_item_availability(tmdb_id: int, media_type: str, user: models.User) -> 
         for p in data.get("results", {}).get(region, {}).get("flatrate", []):
             if p["provider_id"] in user_provider_ids:
                 available_on.add(user_provider_ids[p["provider_id"]])
+            else:
+                other_providers.add(p["provider_name"])
     result["available_on"] = list(available_on)
+    result["other_providers"] = sorted(other_providers)
 
     if media_type == "movie" and not result["has_any_streaming"]:
         result["in_theatres"] = _is_in_theatres_only(tmdb_id)
@@ -72,6 +78,7 @@ def _attach_availability(items: list[dict], user: models.User) -> list[dict]:
         item["available_on"] = info["available_on"]
         item["has_any_streaming"] = info["has_any_streaming"]
         item["in_theatres"] = info["in_theatres"]
+        item["other_providers"] = info["other_providers"]
         return item
 
     with ThreadPoolExecutor(max_workers=min(len(items), 20)) as pool:
@@ -250,9 +257,11 @@ def get_detail(
     region_map = _build_provider_region_map(current_user)
     user_provider_ids = {svc.tmdb_provider_id for svc in current_user.streaming_services}
 
+    user_regions = set(region_map.keys())
     providers_data = tmdb_get(f"/{media_type}/{tmdb_id}/watch/providers")
     availability = {}
     has_any_streaming = False
+    other_providers = set()
     for region, providers_by_type in providers_data.get("results", {}).items():
         flatrate = providers_by_type.get("flatrate", [])
         if flatrate:
@@ -260,9 +269,14 @@ def get_detail(
         matched = [p for p in flatrate if p["provider_id"] in user_provider_ids]
         if matched:
             availability[region] = matched
+        if region in user_regions:
+            for p in flatrate:
+                if p["provider_id"] not in user_provider_ids:
+                    other_providers.add(p["provider_name"])
 
     detail["user_availability"] = availability
     detail["has_any_streaming"] = has_any_streaming
+    detail["other_providers"] = sorted(other_providers)
     detail["in_theatres"] = media_type == "movie" and not has_any_streaming and _is_in_theatres_only(tmdb_id)
     return detail
 

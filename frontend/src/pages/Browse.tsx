@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import api from '../services/api'
 import ContentCard from '../components/content/ContentCard'
 import ScrollablePillRow from '../components/ui/ScrollablePillRow'
@@ -17,6 +17,7 @@ export default function Browse() {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const languagesKey = Array.from(languageIds).sort().join(',')
+  const location = useLocation()
 
   const { data: services } = useQuery({
     queryKey: ['streaming-services'],
@@ -110,6 +111,12 @@ export default function Browse() {
     setSearch('')
     setSearchInput('')
   }
+
+  // Clicking the Trove logo re-navigates to /browse even when already here —
+  // treat that as "start over" and drop any active search.
+  useEffect(() => {
+    clearSearch()
+  }, [location.key])
 
   if (!services?.length) {
     return (

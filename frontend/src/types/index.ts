@@ -48,6 +48,7 @@ export interface TMDBContent {
   available_on?: string[]
   has_any_streaming?: boolean
   in_theatres?: boolean
+  other_providers?: string[]
 }
 
 export interface TMDBProvider {

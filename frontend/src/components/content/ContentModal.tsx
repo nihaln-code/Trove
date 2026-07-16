@@ -208,9 +208,11 @@ export default function ContentModal({ tmdbId, mediaType, onClose }: Props) {
                 <p className="mb-5 text-xs text-amber-400">
                   {detail.in_theatres
                     ? 'Currently in theatres, not yet available to stream.'
-                    : detail.has_any_streaming
-                      ? "Not available on any of your streaming services."
-                      : 'Not currently available to stream anywhere we track.'}
+                    : detail.other_providers?.length > 0
+                      ? `Not available on any of your streaming services. Available on ${detail.other_providers.join(', ')}.`
+                      : detail.has_any_streaming
+                        ? "Not available on any of your streaming services."
+                        : 'Not currently available to stream anywhere we track.'}
                 </p>
               )}
 
