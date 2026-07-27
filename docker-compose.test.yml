@@ -1,0 +1,25 @@
+services:
+  test-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trove_test
+      POSTGRES_PASSWORD: trove_test
+      POSTGRES_DB: trove_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trove_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+  backend-test:
+    build: ./backend
+    depends_on:
+      test-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://trove_test:trove_test@test-db:5432/trove_test
+      SECRET_KEY: test-secret-key
+      GOOGLE_CLIENT_ID: test-google-client-id
+      TMDB_API_KEY: test-tmdb-key
+      OPENAI_API_KEY: test-openai-key
+    command: sh -c "pip install --no-cache-dir -r requirements-dev.txt && python -m pytest -v"

@@ -31,6 +31,13 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
+RUN sed -i '/user  *www-data;/d' /etc/nginx/nginx.conf \
+    && sed -i 's#pid *.*/nginx.pid;#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf \
+    && useradd --create-home --uid 1000 appuser \
+    && chown -R appuser:appuser /app /var/log/nginx /var/lib/nginx /etc/nginx/sites-available/default
+
 ENV PORT=8080
+
+USER appuser
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
