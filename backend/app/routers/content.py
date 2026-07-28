@@ -24,12 +24,38 @@ def tmdb_get(path: str, params: dict = {}) -> dict:
 
 
 def _build_provider_region_map(user: models.User) -> dict[str, list[int]]:
-    """Group provider IDs by region, using per-service override or user default."""
+    """Group provider IDs by region, using per-service override or user default.
+    Guests have no personal services to scope to, so they see everything
+    streaming in their default region instead of a chosen subset."""
+    if user.is_guest:
+        return {user.default_region: []}
     region_map: dict[str, list[int]] = defaultdict(list)
     for svc in user.streaming_services:
         region = svc.region_override or user.default_region
         region_map[region].append(svc.tmdb_provider_id)
     return region_map
+
+
+def _get_item_availability_all_providers(tmdb_id: int, media_type: str, region: str) -> dict:
+    """Guest variant of _get_item_availability: available_on lists every
+    provider streaming the title in the given region, since guests haven't
+    (and can't) choose a personal subset of services."""
+    result = {"available_on": [], "has_any_streaming": False, "in_theatres": False, "other_providers": []}
+    try:
+        data = tmdb_get(f"/{media_type}/{tmdb_id}/watch/providers")
+    except Exception:
+        return result
+
+    for region_data in data.get("results", {}).values():
+        if region_data.get("flatrate"):
+            result["has_any_streaming"] = True
+    flatrate = data.get("results", {}).get(region, {}).get("flatrate", [])
+    result["available_on"] = sorted({p["provider_name"] for p in flatrate})
+
+    if media_type == "movie" and not result["has_any_streaming"]:
+        result["in_theatres"] = _is_in_theatres_only(tmdb_id)
+
+    return result
 
 
 def _get_item_availability(tmdb_id: int, media_type: str, user: models.User) -> dict:
@@ -38,6 +64,9 @@ def _get_item_availability(tmdb_id: int, media_type: str, user: models.User) -> 
     has_any_streaming/in_theatres/other_providers explain WHY it's empty when
     it is. other_providers is scoped to the user's own regions, since a
     service licensed only in another region isn't actually reachable."""
+    if user.is_guest:
+        return _get_item_availability_all_providers(tmdb_id, media_type, user.default_region)
+
     user_provider_ids = {svc.tmdb_provider_id: svc.provider_name for svc in user.streaming_services}
     result = {"available_on": [], "has_any_streaming": False, "in_theatres": False, "other_providers": []}
     if not user_provider_ids:
@@ -119,8 +148,10 @@ def browse(
     """
     Discover content available on the user's streaming services.
     Groups by region so per-service region overrides are respected.
+    Guests have no personal services, so they discover across every
+    provider in their default region instead.
     """
-    if not current_user.streaming_services:
+    if not current_user.streaming_services and not current_user.is_guest:
         return {"results": [], "total_pages": 0, "total_results": 0}
 
     region_map = _build_provider_region_map(current_user)
@@ -133,11 +164,12 @@ def browse(
         try:
             params: dict = {
                 "watch_region": region,
-                "with_watch_providers": "|".join(str(p) for p in provider_ids),
                 "page": page,
                 "language": "en-US",
                 "sort_by": "popularity.desc",
             }
+            if provider_ids:
+                params["with_watch_providers"] = "|".join(str(p) for p in provider_ids)
             if genre_id:
                 params["with_genres"] = genre_id
             if language:
@@ -252,6 +284,17 @@ def get_detail(
         raise HTTPException(400, "media_type must be movie or tv")
 
     detail = tmdb_get(f"/{media_type}/{tmdb_id}", {"language": "en-US", "append_to_response": "credits"})
+
+    if current_user.is_guest:
+        region = current_user.default_region
+        providers_data = tmdb_get(f"/{media_type}/{tmdb_id}/watch/providers")
+        flatrate = providers_data.get("results", {}).get(region, {}).get("flatrate", [])
+        has_any_streaming = any(r.get("flatrate") for r in providers_data.get("results", {}).values())
+        detail["user_availability"] = {region: flatrate} if flatrate else {}
+        detail["has_any_streaming"] = has_any_streaming
+        detail["other_providers"] = []
+        detail["in_theatres"] = media_type == "movie" and not has_any_streaming and _is_in_theatres_only(tmdb_id)
+        return detail
 
     # Attach streaming availability across all user regions
     region_map = _build_provider_region_map(current_user)

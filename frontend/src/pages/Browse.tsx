@@ -7,8 +7,10 @@ import ScrollablePillRow from '../components/ui/ScrollablePillRow'
 import { LANGUAGES } from '../constants/languages'
 import type { TMDBContent, WatchlistItem } from '../types'
 import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
+import { useAuthStore } from '../store/auth'
 
 export default function Browse() {
+  const { user } = useAuthStore()
   const [mediaType, setMediaType] = useState<'movie' | 'tv'>('movie')
   const [genreId, setGenreId] = useState<number | null>(null)
   const [languageIds, setLanguageIds] = useState<Set<string>>(new Set())
@@ -52,7 +54,7 @@ export default function Browse() {
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.results?.length > 0 ? allPages.length + 1 : undefined,
-    enabled: !isSearching && (services?.length ?? 0) > 0,
+    enabled: !isSearching && ((services?.length ?? 0) > 0 || !!user?.is_guest),
   })
 
   const searchQuery = useInfiniteQuery({
@@ -118,7 +120,7 @@ export default function Browse() {
     clearSearch()
   }, [location.key])
 
-  if (!services?.length) {
+  if (!services?.length && !user?.is_guest) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-trove-surface text-trove-muted">
@@ -146,7 +148,7 @@ export default function Browse() {
         <p className="mt-0.5 text-sm text-trove-muted">
           {isSearching
             ? `Searching for "${search}"`
-            : `${mediaType === 'movie' ? 'Movies' : 'TV Shows'} across your services`}
+            : `${mediaType === 'movie' ? 'Movies' : 'TV Shows'}${user?.is_guest ? '' : ' across your services'}`}
         </p>
       </div>
 

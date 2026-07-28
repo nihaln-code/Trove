@@ -137,134 +137,147 @@ export default function Profile() {
 
       {/* Streaming Services */}
       <section className="rounded-xl border border-trove-border bg-trove-card p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-trove-text">Streaming Services</h2>
-            <p className="text-sm text-trove-muted">{myServices.length} services added</p>
-          </div>
-          <button
-            onClick={() => setShowAddPanel((v) => !v)}
-            className="cursor-pointer rounded-lg bg-trove-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-trove-accent-hover"
-          >
-            {showAddPanel ? 'Done' : '+ Add Service'}
-          </button>
-        </div>
-
-        {/* My services list */}
-        {myServices.length > 0 && (
-          <div className="mb-6 space-y-3">
-            {myServices.map((svc) => (
-              <div
-                key={svc.id}
-                className="flex items-center gap-3 rounded-lg border border-trove-border bg-trove-surface p-3"
+        {user?.is_guest ? (
+          <>
+            <h2 className="mb-1 text-lg font-semibold text-trove-text">Streaming Services</h2>
+            <p className="text-sm text-trove-muted">
+              Guest accounts browse and search across every streaming service automatically, no
+              need to add any. Sign in with Google if you'd like to narrow results to services you
+              actually have.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-trove-text">Streaming Services</h2>
+                <p className="text-sm text-trove-muted">{myServices.length} services added</p>
+              </div>
+              <button
+                onClick={() => setShowAddPanel((v) => !v)}
+                className="cursor-pointer rounded-lg bg-trove-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-trove-accent-hover"
               >
-                {svc.provider_logo_path ? (
-                  <img
-                    src={TMDB_IMAGE(svc.provider_logo_path, 'original') ?? ''}
-                    alt={svc.provider_name}
-                    className="h-8 w-8 rounded object-contain"
-                  />
-                ) : (
-                  <div className="h-8 w-8 rounded bg-trove-border" />
-                )}
-                <span className="flex-1 text-sm font-medium text-trove-text">{svc.provider_name}</span>
-
-                <select
-                  value={svc.region_override ?? ''}
-                  onChange={(e) =>
-                    updateServiceRegion.mutate({ id: svc.id, region: e.target.value || null })
-                  }
-                  className="rounded border border-trove-border bg-trove-card px-2 py-1 text-xs text-trove-muted outline-none focus:border-trove-accent"
-                  title="Region override (leave blank to use default)"
-                >
-                  <option value="">Default ({user?.default_region ?? 'US'})</option>
-                  {REGIONS.map((r) => (
-                    <option key={r.code} value={r.code}>{r.code}</option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={() => removeService.mutate(svc.id)}
-                  className="cursor-pointer text-trove-muted transition-colors hover:text-red-400"
-                  title="Remove"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Add service panel */}
-        {showAddPanel && (
-          <div>
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <div className="relative flex-1">
-                <svg
-                  className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-trove-muted"
-                  fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                </svg>
-                <input
-                  value={providerSearch}
-                  onChange={(e) => setProviderSearch(e.target.value)}
-                  placeholder="Search services..."
-                  className="w-full rounded-lg border border-trove-border bg-trove-surface py-1.5 pl-9 pr-3 text-sm text-trove-text placeholder-trove-muted outline-none focus:border-trove-accent"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-trove-muted">Region:</span>
-                <select
-                  value={providerRegion}
-                  onChange={(e) => setProviderRegion(e.target.value)}
-                  className="rounded border border-trove-border bg-trove-surface px-2 py-1 text-xs text-trove-text outline-none focus:border-trove-accent"
-                >
-                  {REGIONS.map((r) => (
-                    <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
-                  ))}
-                </select>
-              </div>
+                {showAddPanel ? 'Done' : '+ Add Service'}
+              </button>
             </div>
 
-            {providersLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto sm:grid-cols-3">
-                {filteredProviders.map((provider) => {
-                  const isAdded = myProviderIds.has(provider.provider_id)
-                  return (
-                    <button
-                      key={provider.provider_id}
-                      onClick={() => !isAdded && addService.mutate(provider)}
-                      disabled={isAdded || addService.isPending}
-                      className={`flex cursor-pointer items-center gap-2 rounded-lg border p-2 text-left text-sm transition-colors ${
-                        isAdded
-                          ? 'cursor-default border-trove-accent bg-trove-accent/10 text-trove-accent'
-                          : 'border-trove-border bg-trove-surface text-trove-text hover:border-trove-accent'
-                      }`}
+            {/* My services list */}
+            {myServices.length > 0 && (
+              <div className="mb-6 space-y-3">
+                {myServices.map((svc) => (
+                  <div
+                    key={svc.id}
+                    className="flex items-center gap-3 rounded-lg border border-trove-border bg-trove-surface p-3"
+                  >
+                    {svc.provider_logo_path ? (
+                      <img
+                        src={TMDB_IMAGE(svc.provider_logo_path, 'original') ?? ''}
+                        alt={svc.provider_name}
+                        className="h-8 w-8 rounded object-contain"
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded bg-trove-border" />
+                    )}
+                    <span className="flex-1 text-sm font-medium text-trove-text">{svc.provider_name}</span>
+
+                    <select
+                      value={svc.region_override ?? ''}
+                      onChange={(e) =>
+                        updateServiceRegion.mutate({ id: svc.id, region: e.target.value || null })
+                      }
+                      className="rounded border border-trove-border bg-trove-card px-2 py-1 text-xs text-trove-muted outline-none focus:border-trove-accent"
+                      title="Region override (leave blank to use default)"
                     >
-                      {provider.logo_path ? (
-                        <img
-                          src={TMDB_IMAGE(provider.logo_path, 'original') ?? ''}
-                          alt={provider.provider_name}
-                          className="h-6 w-6 rounded object-contain flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="h-6 w-6 flex-shrink-0 rounded bg-trove-border" />
-                      )}
-                      <span className="truncate text-xs">{provider.provider_name}</span>
-                      {isAdded && <span className="ml-auto text-xs">✓</span>}
+                      <option value="">Default ({user?.default_region ?? 'US'})</option>
+                      {REGIONS.map((r) => (
+                        <option key={r.code} value={r.code}>{r.code}</option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={() => removeService.mutate(svc.id)}
+                      className="cursor-pointer text-trove-muted transition-colors hover:text-red-400"
+                      title="Remove"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                      </svg>
                     </button>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
             )}
-          </div>
+
+            {/* Add service panel */}
+            {showAddPanel && (
+              <div>
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1">
+                    <svg
+                      className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-trove-muted"
+                      fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                    </svg>
+                    <input
+                      value={providerSearch}
+                      onChange={(e) => setProviderSearch(e.target.value)}
+                      placeholder="Search services..."
+                      className="w-full rounded-lg border border-trove-border bg-trove-surface py-1.5 pl-9 pr-3 text-sm text-trove-text placeholder-trove-muted outline-none focus:border-trove-accent"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-trove-muted">Region:</span>
+                    <select
+                      value={providerRegion}
+                      onChange={(e) => setProviderRegion(e.target.value)}
+                      className="rounded border border-trove-border bg-trove-surface px-2 py-1 text-xs text-trove-text outline-none focus:border-trove-accent"
+                    >
+                      {REGIONS.map((r) => (
+                        <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {providersLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-trove-accent border-t-transparent" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto sm:grid-cols-3">
+                    {filteredProviders.map((provider) => {
+                      const isAdded = myProviderIds.has(provider.provider_id)
+                      return (
+                        <button
+                          key={provider.provider_id}
+                          onClick={() => !isAdded && addService.mutate(provider)}
+                          disabled={isAdded || addService.isPending}
+                          className={`flex cursor-pointer items-center gap-2 rounded-lg border p-2 text-left text-sm transition-colors ${
+                            isAdded
+                              ? 'cursor-default border-trove-accent bg-trove-accent/10 text-trove-accent'
+                              : 'border-trove-border bg-trove-surface text-trove-text hover:border-trove-accent'
+                          }`}
+                        >
+                          {provider.logo_path ? (
+                            <img
+                              src={TMDB_IMAGE(provider.logo_path, 'original') ?? ''}
+                              alt={provider.provider_name}
+                              className="h-6 w-6 rounded object-contain flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="h-6 w-6 flex-shrink-0 rounded bg-trove-border" />
+                          )}
+                          <span className="truncate text-xs">{provider.provider_name}</span>
+                          {isAdded && <span className="ml-auto text-xs">✓</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>

@@ -9,6 +9,7 @@ import RatingButtons from '../components/content/RatingButtons'
 import ScrollablePillRow from '../components/ui/ScrollablePillRow'
 import { LANGUAGES } from '../constants/languages'
 import { RecommendationCardSkeleton } from '../components/ui/Skeletons'
+import { useAuthStore } from '../store/auth'
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso + 'Z').getTime()) / 1000)
@@ -21,6 +22,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function Recommendations() {
+  const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [items, setItems] = useState<RecommendationItem[]>([])
   const [generatedAt, setGeneratedAt] = useState<string | null>(null)
@@ -185,7 +187,7 @@ export default function Recommendations() {
     return () => observer.disconnect()
   }, [onIntersect, items.length])
 
-  const noServices = services.length === 0
+  const noServices = services.length === 0 && !user?.is_guest
   const emptyWatchlist = watchlist.length === 0
 
   return (
@@ -304,7 +306,11 @@ export default function Recommendations() {
         <div className="mx-auto max-w-md rounded-xl border border-trove-border bg-trove-surface p-8 text-center">
           <p className="mb-2 text-sm font-medium text-trove-text">No recommendations found</p>
           <p className="text-sm text-trove-muted">
-            Try adding more titles to your <Link to="/watchlist" className="text-trove-accent hover:underline">watchlist</Link>, or check that your streaming services are set up in your <Link to="/profile" className="text-trove-accent hover:underline">profile</Link>.
+            {user?.is_guest ? (
+              <>Try adding more titles to your <Link to="/watchlist" className="text-trove-accent hover:underline">watchlist</Link>.</>
+            ) : (
+              <>Try adding more titles to your <Link to="/watchlist" className="text-trove-accent hover:underline">watchlist</Link>, or check that your streaming services are set up in your <Link to="/profile" className="text-trove-accent hover:underline">profile</Link>.</>
+            )}
           </p>
         </div>
       )}

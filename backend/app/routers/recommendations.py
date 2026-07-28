@@ -59,6 +59,10 @@ def _get_genre_map() -> dict[int, str]:
 
 
 def _build_provider_region_map(user: models.User) -> dict[str, list[int]]:
+    """Guests have no personal services; they discover across every provider
+    in their default region instead of a chosen subset."""
+    if user.is_guest:
+        return {user.default_region: []}
     region_map: dict[str, list[int]] = defaultdict(list)
     for svc in user.streaming_services:
         region = svc.region_override or user.default_region
@@ -67,6 +71,14 @@ def _build_provider_region_map(user: models.User) -> dict[str, list[int]]:
 
 
 def _get_availability(tmdb_id: int, media_type: str, user: models.User) -> list[str]:
+    if user.is_guest:
+        try:
+            data = tmdb_get(f"/{media_type}/{tmdb_id}/watch/providers")
+        except Exception:
+            return []
+        flatrate = data.get("results", {}).get(user.default_region, {}).get("flatrate", [])
+        return sorted({p["provider_name"] for p in flatrate})
+
     user_provider_ids = {svc.tmdb_provider_id: svc.provider_name for svc in user.streaming_services}
     if not user_provider_ids:
         return []
@@ -186,13 +198,14 @@ def _run_generation(
             vote_floor = 10 if language and language != "en" else 50
             params: dict = {
                 "watch_region": region,
-                "with_watch_providers": "|".join(str(p) for p in provider_ids),
                 "with_genres": genre_id,
                 "page": page,
                 "language": "en-US",
                 "sort_by": "popularity.desc",
                 "vote_count.gte": vote_floor,
             }
+            if provider_ids:
+                params["with_watch_providers"] = "|".join(str(p) for p in provider_ids)
             if language:
                 params["with_original_language"] = language
             # Skip the auto-detected avoided-genres exclusion when the user explicitly
@@ -376,7 +389,7 @@ def get_recommendations(
 ):
     if not current_user.watchlist:
         raise HTTPException(400, "Add items to your watchlist first to get recommendations")
-    if not current_user.streaming_services:
+    if not current_user.streaming_services and not current_user.is_guest:
         raise HTTPException(400, "Add streaming services first to get recommendations")
 
     lang_list = [l.strip() for l in languages.split(",") if l.strip()] if languages else None
