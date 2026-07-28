@@ -61,6 +61,27 @@ def make_user(db_session):
 
 
 @pytest.fixture()
+def make_guest(db_session):
+    counter = {"n": 0}
+
+    def _make() -> models.User:
+        counter["n"] += 1
+        guest_id = f"test-guest-{counter['n']}"
+        user = models.User(
+            email=f"{guest_id}@guest.trove.local",
+            name="Guest",
+            google_id=f"guest-{guest_id}",
+            is_guest=True,
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+        return user
+
+    return _make
+
+
+@pytest.fixture()
 def auth_headers():
     def _headers(user: models.User) -> dict:
         token = auth.create_access_token(user.id)

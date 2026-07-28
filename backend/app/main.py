@@ -13,6 +13,7 @@ Base.metadata.create_all(bind=engine)
 
 # Add new columns to existing tables without dropping data
 with engine.connect() as conn:
+    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_guest BOOLEAN NOT NULL DEFAULT FALSE"))
     conn.execute(text("ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS rating INTEGER"))
     conn.execute(text("ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS metadata_json TEXT"))
     conn.execute(text("ALTER TABLE group_watchlist_items ADD COLUMN IF NOT EXISTS metadata_json TEXT"))

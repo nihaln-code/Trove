@@ -116,3 +116,38 @@ def test_owner_cannot_leave_without_deleting(client, make_user, auth_headers):
 
     resp = client.delete(f"/groups/{group['id']}/members/me", headers=auth_headers(owner))
     assert resp.status_code == 403
+
+
+def test_guest_cannot_create_group(client, make_guest, auth_headers):
+    guest = make_guest()
+
+    resp = client.post("/groups", json={"name": "Movie Night"}, headers=auth_headers(guest))
+    assert resp.status_code == 403
+
+
+def test_guest_cannot_join_group(client, make_user, make_guest, auth_headers):
+    owner = make_user(email="owner@example.com")
+    guest = make_guest()
+    group = _create_group(client, auth_headers(owner))
+
+    resp = client.post(
+        "/groups/join",
+        json={"invite_code": group["invite_code"]},
+        headers=auth_headers(guest),
+    )
+    assert resp.status_code == 403
+
+
+def test_guest_can_preview_a_group_invite(client, make_user, make_guest, auth_headers):
+    owner = make_user(email="owner@example.com")
+    guest = make_guest()
+    group = _create_group(client, auth_headers(owner))
+
+    # Preview is intentionally guest-accessible (read-only) so the invite
+    # link's landing page can show what's being joined before the guest is
+    # told they need to sign in with Google to actually join.
+    resp = client.get(f"/groups/preview/{group['invite_code']}", headers=auth_headers(guest))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == group["name"]
+    assert body["already_member"] is False

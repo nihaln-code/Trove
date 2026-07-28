@@ -4,6 +4,7 @@ export interface User {
   name: string
   avatar_url: string | null
   default_region: string
+  is_guest: boolean
 }
 
 export interface StreamingService {

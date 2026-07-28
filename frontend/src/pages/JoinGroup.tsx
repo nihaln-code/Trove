@@ -9,7 +9,7 @@ import type { GroupPreview } from '../types'
 export default function JoinGroup() {
   const { inviteCode } = useParams<{ inviteCode: string }>()
   const navigate = useNavigate()
-  const { user, setUser, isLoading: authLoading } = useAuthStore()
+  const { user, setUser, logout, isLoading: authLoading } = useAuthStore()
   const [loginError, setLoginError] = useState(false)
 
   const { data: preview, isLoading: previewLoading, isError } = useQuery<GroupPreview>({
@@ -77,6 +77,23 @@ export default function JoinGroup() {
         {loginError && (
           <p className="mt-3 text-center text-xs text-red-400">Sign-in failed. Please try again.</p>
         )}
+      </Card>
+    )
+  }
+
+  if (user.is_guest) {
+    return (
+      <Card>
+        <h2 className="mb-2 text-center text-lg font-semibold text-trove-text">Guest accounts can't join groups</h2>
+        <p className="mb-6 text-center text-sm text-trove-muted">
+          Sign in with Google to accept this invite and join the group.
+        </p>
+        <button
+          onClick={() => logout()}
+          className="block w-full cursor-pointer rounded-lg bg-trove-accent px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-trove-accent-hover"
+        >
+          Sign in with Google
+        </button>
       </Card>
     )
   }

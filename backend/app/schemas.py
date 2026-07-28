@@ -27,6 +27,7 @@ class UserOut(BaseModel):
     name: str
     avatar_url: Optional[str]
     default_region: str
+    is_guest: bool
 
     model_config = {"from_attributes": True}
 

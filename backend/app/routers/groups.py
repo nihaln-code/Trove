@@ -111,6 +111,9 @@ def create_group(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
+    if current_user.is_guest:
+        raise HTTPException(status_code=403, detail="Guest accounts cannot create groups")
+
     for _ in range(5):
         group = models.Group(
             name=body.name,
@@ -148,6 +151,9 @@ def join_group(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
+    if current_user.is_guest:
+        raise HTTPException(status_code=403, detail="Guest accounts cannot join groups")
+
     group = (
         db.query(models.Group)
         .filter(models.Group.invite_code == body.invite_code.upper())

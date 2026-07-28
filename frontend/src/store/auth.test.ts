@@ -8,6 +8,7 @@ const testUser: User = {
   name: 'Test User',
   avatar_url: null,
   default_region: 'US',
+  is_guest: false,
 }
 
 describe('useAuthStore', () => {

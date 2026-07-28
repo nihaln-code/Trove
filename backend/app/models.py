@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, UniqueConstraint, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, UniqueConstraint, Text, Boolean
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -14,6 +14,7 @@ class User(Base):
     google_id = Column(String, unique=True, nullable=False)
     avatar_url = Column(String)
     default_region = Column(String(10), default="US", nullable=False)
+    is_guest = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     streaming_services = relationship("UserStreamingService", back_populates="user", cascade="all, delete-orphan")

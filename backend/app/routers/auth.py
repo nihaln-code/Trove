@@ -1,3 +1,4 @@
+import uuid
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -43,6 +44,25 @@ async def google_login(body: schemas.GoogleAuthRequest, db: Session = Depends(ge
         user.name = name
         user.avatar_url = avatar_url
         db.commit()
+
+    return schemas.TokenResponse(
+        access_token=auth.create_access_token(user.id),
+        refresh_token=auth.create_refresh_token(user.id),
+    )
+
+
+@router.post("/guest", response_model=schemas.TokenResponse)
+def guest_login(db: Session = Depends(get_db)):
+    guest_id = uuid.uuid4().hex
+    user = models.User(
+        google_id=f"guest-{guest_id}",
+        email=f"guest-{guest_id}@guest.trove.local",
+        name="Guest",
+        is_guest=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
     return schemas.TokenResponse(
         access_token=auth.create_access_token(user.id),

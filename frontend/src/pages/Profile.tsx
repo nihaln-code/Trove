@@ -103,7 +103,9 @@ export default function Profile() {
           )}
           <div>
             <p className="font-semibold text-trove-text">{user?.name}</p>
-            <p className="text-sm text-trove-muted">{user?.email}</p>
+            <p className="text-sm text-trove-muted">
+              {user?.is_guest ? 'Guest account' : user?.email}
+            </p>
           </div>
         </div>
       </section>

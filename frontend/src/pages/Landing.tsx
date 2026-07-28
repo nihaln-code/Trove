@@ -49,6 +49,22 @@ export default function Landing() {
     }
   }
 
+  async function handleContinueAsGuest() {
+    setIsSigningIn(true)
+    setLoginError(null)
+    try {
+      const { data } = await api.post('/auth/guest')
+      localStorage.setItem('access_token', data.access_token)
+      localStorage.setItem('refresh_token', data.refresh_token)
+      await completeSignIn()
+    } catch (err) {
+      console.error('Guest login failed', err)
+      setLoginError('Could not start a guest session. Please try again.')
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-trove-bg lg:flex-row">
       {/* Visual panel: a scattered wall of real posters, everyone's separate picks pulled into one view */}
@@ -133,14 +149,22 @@ export default function Landing() {
                 Signing in...
               </div>
             ) : (
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setLoginError('Google sign-in failed. Please try again.')}
-                theme="filled_black"
-                shape="rectangular"
-                size="large"
-                text="continue_with"
-              />
+              <>
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setLoginError('Google sign-in failed. Please try again.')}
+                  theme="filled_black"
+                  shape="rectangular"
+                  size="large"
+                  text="continue_with"
+                />
+                <button
+                  onClick={handleContinueAsGuest}
+                  className="cursor-pointer text-sm text-trove-muted underline-offset-4 transition-colors hover:text-trove-text hover:underline"
+                >
+                  Continue as guest
+                </button>
+              </>
             )}
             {loginError && (
               <p className="text-center text-xs text-red-400">{loginError}</p>
