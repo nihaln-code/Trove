@@ -1,3 +1,7 @@
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session as OrmSession
+
+
 def _item_payload(tmdb_id: int = 550) -> dict:
     return {
         "tmdb_id": tmdb_id,
@@ -101,3 +105,14 @@ def test_cannot_modify_another_users_watchlist_item(client, make_user, auth_head
 
     resp = client.delete(f"/watchlist/{created['id']}", headers=auth_headers(intruder))
     assert resp.status_code == 404
+
+
+def test_add_to_watchlist_race_returns_clean_error_not_500(client, make_user, auth_headers, monkeypatch):
+    user = make_user()
+
+    def failing_commit(self):
+        raise IntegrityError("stmt", {}, Exception("duplicate key"))
+    monkeypatch.setattr(OrmSession, "commit", failing_commit)
+
+    resp = client.post("/watchlist", json=_item_payload(), headers=auth_headers(user))
+    assert resp.status_code == 400

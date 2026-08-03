@@ -1,6 +1,7 @@
 import uuid
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -38,12 +39,21 @@ async def google_login(body: schemas.GoogleAuthRequest, db: Session = Depends(ge
             avatar_url=avatar_url,
         )
         db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        user.name = name
-        user.avatar_url = avatar_url
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # A concurrent first-time login for the same Google account (e.g.
+            # a double-click, or a frontend retry) raced us; the other
+            # request's insert already landed, so use that row instead of
+            # failing a login that should otherwise succeed.
+            db.rollback()
+            user = db.query(models.User).filter(models.User.google_id == google_id).first()
+        else:
+            db.refresh(user)
+
+    user.name = name
+    user.avatar_url = avatar_url
+    db.commit()
 
     return schemas.TokenResponse(
         access_token=auth.create_access_token(user.id),

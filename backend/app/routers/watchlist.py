@@ -1,5 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.database import get_db, SessionLocal
 from app import models, schemas, auth
@@ -61,7 +62,11 @@ def add_to_watchlist(
         status=body.status,
     )
     db.add(item)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Already in watchlist")
     db.refresh(item)
     background_tasks.add_task(_enrich_item_metadata, item.id)
     return item

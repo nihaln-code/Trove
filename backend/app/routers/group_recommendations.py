@@ -3,6 +3,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, auth
@@ -334,7 +335,11 @@ def get_group_recommendations(
     if page > 1:
         return _run_group_generation(group_id, current_user, db, page=page, mode=mode)
 
-    cache = db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).first()
+    cache = (
+        db.query(models.GroupRecommendationCache)
+        .filter_by(group_id=group_id, user_id=current_user.id)
+        .first()
+    )
     if cache:
         stale = datetime.utcnow() - cache.generated_at > timedelta(minutes=CACHE_TTL_MINUTES)
         if not stale:
@@ -348,11 +353,23 @@ def get_group_recommendations(
     results = _run_group_generation(group_id, current_user, db)
     cache = models.GroupRecommendationCache(
         group_id=group_id,
+        user_id=current_user.id,
         items=json.dumps(results),
         generated_at=datetime.utcnow(),
     )
     db.add(cache)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Concurrent request for the same member raced us to create the
+        # first cache row; their write already landed, just use it.
+        db.rollback()
+        cache = (
+            db.query(models.GroupRecommendationCache)
+            .filter_by(group_id=group_id, user_id=current_user.id)
+            .first()
+        )
+        return {"items": json.loads(cache.items), "generated_at": cache.generated_at.isoformat(), "based_on": based_on}
     return {"items": results, "generated_at": cache.generated_at.isoformat(), "based_on": based_on}
 
 
@@ -377,11 +394,18 @@ def refresh_group_recommendations(
     if mode == "member_tastes" or lang_list:
         return {"items": results, "generated_at": datetime.utcnow().isoformat(), "based_on": based_on}
 
-    cache = db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).first()
+    cache = (
+        db.query(models.GroupRecommendationCache)
+        .filter_by(group_id=group_id, user_id=current_user.id)
+        .first()
+    )
     if cache is None:
-        cache = models.GroupRecommendationCache(group_id=group_id)
+        cache = models.GroupRecommendationCache(group_id=group_id, user_id=current_user.id)
         db.add(cache)
     cache.items = json.dumps(results)
     cache.generated_at = datetime.utcnow()
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
     return {"items": results, "generated_at": cache.generated_at.isoformat(), "based_on": based_on}

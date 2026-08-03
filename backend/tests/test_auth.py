@@ -44,3 +44,48 @@ def test_guest_is_not_blocked_from_recommendations(client):
     # 403 like the group endpoints.
     assert resp.status_code == 400
     assert "watchlist" in resp.json()["detail"].lower()
+
+
+def test_google_login_race_reuses_existing_user_instead_of_500ing(client, db_session, monkeypatch):
+    """Simulates a double-click / frontend retry: two near-simultaneous
+    first-time logins for the same Google account race to insert the same
+    google_id. The second request's pre-insert lookup misses (the row isn't
+    committed yet), but by the time it inserts, the real unique constraint
+    fires for real - it should recover by reusing the row, not 500."""
+    from app import models
+
+    fake_idinfo = {
+        "sub": "google-race-test-id",
+        "email": "race@example.com",
+        "name": "Race Test",
+        "picture": None,
+    }
+    monkeypatch.setattr(
+        "app.routers.auth.id_token.verify_oauth2_token",
+        lambda *a, **k: fake_idinfo,
+    )
+
+    # The "other" concurrent request already committed this row.
+    db_session.add(models.User(
+        google_id="google-race-test-id", email="race@example.com", name="Race Test",
+    ))
+    db_session.commit()
+
+    # Make our request's pre-insert lookup miss it anyway, as if it ran
+    # just before the other request's commit landed.
+    from sqlalchemy.orm import Query as OrmQuery
+    real_first = OrmQuery.first
+    state = {"calls": 0}
+
+    def first_missing_once(self):
+        state["calls"] += 1
+        if state["calls"] == 1:
+            return None
+        return real_first(self)
+
+    monkeypatch.setattr(OrmQuery, "first", first_missing_once)
+
+    resp = client.post("/auth/google", json={"credential": "fake-credential"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "access_token" in body

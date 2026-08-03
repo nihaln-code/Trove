@@ -1,9 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models, schemas, auth
 
 router = APIRouter(prefix="/streaming-services", tags=["streaming-services"])
+
+
+def _invalidate_group_caches_for_user(db: Session, user_id: int) -> None:
+    """A member's personal service list feeds every group they're in, so a
+    change here can make all of that member's groups' cached recommendations
+    stale (right up until the TTL happens to expire)."""
+    db.query(models.GroupRecommendationCache).filter(
+        models.GroupRecommendationCache.group_id.in_(
+            db.query(models.GroupMembership.group_id).filter_by(user_id=user_id)
+        )
+    ).delete(synchronize_session=False)
 
 
 @router.get("", response_model=list[schemas.StreamingServiceOut])
@@ -33,7 +45,12 @@ def add_service(
         region_override=body.region_override.upper() if body.region_override else None,
     )
     db.add(service)
-    db.commit()
+    _invalidate_group_caches_for_user(db, current_user.id)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Service already added")
     db.refresh(service)
     return service
 
@@ -55,6 +72,7 @@ def update_service_region(
 
     # Pass null explicitly to clear the override
     service.region_override = body.region_override.upper() if body.region_override else None
+    _invalidate_group_caches_for_user(db, current_user.id)
     db.commit()
     db.refresh(service)
     return service
@@ -75,4 +93,5 @@ def remove_service(
         raise HTTPException(status_code=404, detail="Service not found")
 
     db.delete(service)
+    _invalidate_group_caches_for_user(db, current_user.id)
     db.commit()

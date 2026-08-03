@@ -77,11 +77,18 @@ class RecommendationCache(Base):
 
 
 class GroupRecommendationCache(Base):
+    """Per-member, not per-group: availability depends on the viewing
+    member's own region, so a single group-wide cache entry would silently
+    serve one member's region-scoped results to everyone else in the group."""
     __tablename__ = "group_recommendation_cache"
 
-    group_id = Column(Integer, ForeignKey("groups.id"), primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     items = Column(Text, nullable=False)
     generated_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("group_id", "user_id"),)
 
 
 class GroupRole(str, enum.Enum):

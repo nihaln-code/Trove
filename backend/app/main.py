@@ -21,7 +21,13 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE group_watchlist_items DROP COLUMN IF EXISTS rating"))
     # Superseded by group_excluded_services (allow-list -> exclusion-list model)
     conn.execute(text("DROP TABLE IF EXISTS group_streaming_services"))
+    # Recreated below keyed by (group_id, user_id) instead of group_id alone;
+    # safe to drop since it's pure regenerable cache, not user-authored data
+    conn.execute(text("DROP TABLE IF EXISTS group_recommendation_cache"))
     conn.commit()
+
+# Recreate any tables just dropped above with their current schema
+Base.metadata.create_all(bind=engine)
 
 
 def _backfill_group_metadata() -> None:

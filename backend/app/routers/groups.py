@@ -172,7 +172,14 @@ def join_group(
 
     membership = models.GroupMembership(group_id=group.id, user_id=current_user.id, role=models.GroupRole.member)
     db.add(membership)
-    db.commit()
+    # A new member's personal services join the group's pooled list, so
+    # cached recommendations (computed against the old member set) are stale.
+    db.query(models.GroupRecommendationCache).filter_by(group_id=group.id).delete()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Already a member of this group")
     db.refresh(group)
     return _group_detail_out(group)
 
@@ -229,6 +236,8 @@ def leave_group(
     if membership.role == models.GroupRole.owner:
         raise HTTPException(status_code=403, detail="Owners cannot leave; delete the group instead")
     db.delete(membership)
+    # The departing member's services drop out of the group's pooled list.
+    db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).delete()
     db.commit()
 
 
@@ -254,6 +263,8 @@ def remove_member(
     if not membership:
         raise HTTPException(status_code=404, detail="Member not found")
     db.delete(membership)
+    # The removed member's services drop out of the group's pooled list.
+    db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).delete()
     db.commit()
 
 
@@ -322,7 +333,11 @@ def add_group_watchlist_item(
         added_by_user_id=current_user.id,
     )
     db.add(item)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Already in group watchlist")
     db.refresh(item)
     background_tasks.add_task(_enrich_group_item_metadata, item.id)
     return _item_out(item, current_user.id)
@@ -506,7 +521,15 @@ def set_group_services(
             provider_logo_path=svc.provider_logo_path,
         ))
 
-    db.commit()
+    db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).delete()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent PUT to the same group raced us on an overlapping add;
+        # the other request's write already landed, reflect that instead of
+        # 500ing on a conflict that's effectively already resolved.
+        db.rollback()
 
     active, available, is_custom = get_group_active_services(db, group_id)
     return schemas.GroupServicesResponse(active=active, available=available, is_custom=is_custom)
@@ -522,4 +545,5 @@ def reset_group_services(
     _get_membership_or_403(db, group_id, current_user.id)
     db.query(models.GroupExcludedService).filter_by(group_id=group_id).delete()
     db.query(models.GroupAddedService).filter_by(group_id=group_id).delete()
+    db.query(models.GroupRecommendationCache).filter_by(group_id=group_id).delete()
     db.commit()
